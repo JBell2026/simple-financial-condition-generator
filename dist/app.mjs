@@ -75,10 +75,13 @@ function loadLines(lines,sheetName=''){
 $('parse').onclick=()=>{rawLines=$('raw').value.split('\n').map((text,i)=>({text,source:'Edited line '+(i+1)}));loadLines(rawLines);};
 function selectAmounts(lines){const v=$('amountColumn').value;return selectAmountsByPage(lines,v==='auto'?undefined:Number(v));}
 // Offer a column choice when the balance sheet shows more than one amount per account.
+// The worksheet and amount-column choices appear only when there is a real choice:
+// an Excel file with several sheets, or a statement with several amount columns.
+function showImportChoices(){$('sheet').closest('label').hidden=!workbook||$('sheet').options.length<2;$('amountColumn').closest('label').hidden=$('amountColumn').disabled;}
 function showAmountColumns(lines){
  const source=balanceSheetSource(lines).lines,info=amountColumns(source.length?source:lines);
  $('amountColumn').innerHTML='<option value="auto">Automatic — '+(info.count>1?(info.index>=0?'latest period ('+escape(info.labels[info.index])+')':'Total / rightmost column'):'single amount column')+'</option>'+(info.count>1?Array.from({length:info.count},(_,i)=>'<option value="'+i+'">Column '+(i+1)+(info.labels[i]?' — '+escape(info.labels[i]):'')+'</option>').join(''):'');
- $('amountColumn').disabled=info.count<2;
+ $('amountColumn').disabled=info.count<2;showImportChoices();
 }
 $('amountColumn').onchange=()=>{try{if(workbook)loadLines(selectAmounts(rawLines),$('sheet').value);else if(rawLines.length)importPdfLines();}catch(e){status(e.message);}};
 
@@ -149,7 +152,7 @@ $('file').onchange=async()=>{
   if(!$('company').value){const first=rawLines.find(l=>l.text.trim());if(first&&!/assets|balance sheet/i.test(first.text)&&first.text.length<130)$('company').value=first.text.trim();}
   status(`${rows.filter(r=>r.include).length} detail lines extracted from ${file.name}. Review every extracted line.`);
  }catch(e){status('Unable to import: '+e.message+'. You can paste text or add lines manually.');}
- finally{setBusy(false);}
+ finally{setBusy(false);showImportChoices();}
 };
 table();
 function updateReportingDate(){$('date').value=reportingDate($('reportYear').value,$('xmlPeriod').value);resetReview();}

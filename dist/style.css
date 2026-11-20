@@ -103,3 +103,5 @@ label.include-line input{width:auto;margin:0}
 .reconcile td:last-child,.reconcile th:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .reconcile tr.reconciled th{background:#B3C2CA;color:#20354D}
 .reconcile tr.unreconciled th{background:#985448;color:#F7F4EC}
+
+[hidden]{display:none!important}
