@@ -100,6 +100,24 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
   +'<tr class="'+(diff===0?'reconciled':'unreconciled')+'"><th>'+(diff===null?'Enter total income and the P&amp;L’s net income to compare':diff===0?'They match':'They do not match — difference')+'</th><th>'+(diff===null?'—':dollars(diff))+'</th></tr></tbody></table>'+(diff&&Math.abs(diff)<=500&&valid.every(r=>r.cents%100===0)?'<p class="small">A difference this small is rounding to whole dollars. Change one expense line, or the net income, by that amount so the figures tie. The app does not adjust anything for you.</p>':'');
  const excluded=cost.total&&!$('includeCogs').checked;$('costNotice').hidden=!cost.total;
  $('costNotice').textContent=cost.total?(excluded?'This P&L reports '+money(cost.total)+' of cost of revenue / cost of goods sold ('+cost.count+' line'+(cost.count===1?'':'s')+') that is not in the expense list.'+(diff!==null&&Math.abs(diff-cost.total)<=500?(diff===cost.total?' That amount equals the reconciliation difference.':' That accounts for the reconciliation difference, apart from rounding.'):'')+' Tick “Include cost of revenue lines” if those costs, such as loan officer commissions, belong in Schedule D.':money(cost.total)+' of cost of revenue ('+cost.count+' line'+(cost.count===1?'':'s')+') is included in the expense list. Review each category.'):'';}
+ // Schedule C at a glance: every Schedule C line that will carry an amount, the amount,
+ // and where on this page that amount comes from.
+ {const incomeNames={C210:'Origination fees',C220:'Fees from correspondents and brokers',C230:'Broker fees',C240:'Other origination income',C770:'Other non-interest income'},g=report.groups,ok=Number.isSafeInteger(grossValue)&&Number.isSafeInteger(interestValue);
+ const first=$('incomeField').value,second=$('splitRevenue').checked&&Number.isSafeInteger(g[$('incomeField2').value])&&$('incomeField2').value!==first?$('incomeField2').value:'';
+ const row=(code,name,value,from,cls='')=>'<tr class="'+cls+'"><td>'+code+'</td><td>'+esc(name)+'<br><small>'+from+'</small></td><td>'+(value===null?'—':money(value))+'</td></tr>';
+ const interestLines=s.active.filter(r=>/^C1[0-5]0$/.test(r.field||'')&&Number.isSafeInteger(r.cents)),interestCodes=[...new Set(interestLines.map(r=>r.field))].sort();
+ const names=list=>list.map(r=>esc(r.label)).join(', ');
+ $('scheduleCBreakdown').innerHTML='<table><thead><tr><th>NMLS line</th><th>What goes there</th><th>Amount</th></tr></thead><tbody>'
+  +'<tr class="group-row"><th colspan="3">Income</th></tr>'
+  +row(first,incomeNames[first],ok?g[first]:null,second?'Total gross income, minus other interest income, minus the amount split to '+second+'. Set in “What type of revenue is this?” above.':'Total gross income minus other interest income. Set in “What type of revenue is this?” above.')
+  +(second?row(second,incomeNames[second],ok?g[second]:null,'The “Amount for the second type” you entered in the revenue split above.'):'')
+  +row('C060','Other interest income',ok?g.C060:null,'The “Other interest income” box above. Enter 0 if the company earned none.')
+  +row('C800','Total gross income',ok?report.gross:null,'NMLS adds this up itself from the income lines above. It should equal the “Total gross income” box.','calculated-row')
+  +'<tr class="group-row"><th colspan="3">Interest expense</th></tr>'
+  +(interestCodes.length?interestCodes.map(code=>row(code,dFieldMap[code].label,g[code]??0,'Expense lines assigned to '+code+': '+names(interestLines.filter(r=>r.field===code))+'.')).join('')+row('C160','Total interest expense',interestCodes.reduce((t,c)=>t+(g[c]||0),0),'NMLS adds this up itself from the interest expense lines above.','calculated-row')
+   :'<tr><td>C100–C150</td><td>No interest expense<br><small>None of the expense lines is assigned to an interest expense line. To add one, set an expense’s SFC category to J — Interest Paid, or choose a C100–C150 field for it in the detailed review.</small></td><td>'+money(0)+'</td></tr>')
+  +'</tbody></table>';
+ $('scheduleCBox').hidden=!s.active.length&&!Number.isSafeInteger(grossValue);}
  $('scheduleDPreview').innerHTML='<table><thead><tr><th>NMLS field</th><th>Description</th><th>Original</th><th>NMLS whole dollars</th></tr></thead><tbody>'+dReviewRows(report).map(r=>'<tr class="'+(r.deps?'calculated-row':'')+'"><td>'+r.code+'</td><td>'+esc(r.label)+(r.formula?'<details class="row-detail"><summary>Calculation</summary>'+esc(r.formula)+'</details>':'')+'</td><td>'+money(r.cents)+'</td><td>'+money(r.whole*100)+'</td></tr>').join('')+'</tbody></table>';return s;}
  ['scheduleGross','scheduleInterest','scheduleNet','scheduleExpenseControl','incomeField','incomeField2','incomeSplitAmount'].forEach(id=>$(id).addEventListener('input',()=>{onChange();summary();}));
  // Splitting revenue: the second field defaults to one different from the first.

@@ -161,3 +161,8 @@ label.include-line input{width:auto;margin:0}
 .reconcile td small{font-weight:400;opacity:.75;font-size:12px;line-height:1.4}
 .reconcile td{vertical-align:top}
 #plReconcileIntro{max-width:640px;margin:14px 0 6px}
+.reconcile.breakdown{max-width:760px}
+.reconcile.breakdown td:first-child{font-weight:600;white-space:nowrap;width:96px}
+.reconcile.breakdown tr.group-row th{background:#B3C2CA;color:#20354D;text-align:left;font-weight:700;padding:6px 10px}
+#scheduleCBox h3{font-family:Spartan,sans-serif;font-size:22px;margin:22px 0 4px}
+#scheduleCBox>p{margin:0 0 8px;max-width:760px}
