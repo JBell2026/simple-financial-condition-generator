@@ -158,3 +158,6 @@ label.include-line input{width:auto;margin:0}
 .page-picker p{margin:0 0 6px}
 .page-picker .page-check{display:flex;flex-direction:row;align-items:center;gap:8px;margin:4px 0;font-weight:500}
 .page-picker .page-check input{width:16px;height:16px;margin:0}
+.reconcile td small{font-weight:400;opacity:.75;font-size:12px;line-height:1.4}
+.reconcile td{vertical-align:top}
+#plReconcileIntro{max-width:640px;margin:14px 0 6px}
