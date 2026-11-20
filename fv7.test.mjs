@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import {requiresOtherAssetsExplanation,definitionIssues,definitionWarnings} from './dist/fv7.mjs';
+import {exportXml} from './dist/engine.mjs';
+import {classifyExpense} from './dist/expenses.mjs';
+assert.equal(requiresOtherAssetsExplanation({A010:95000,A230H:5000}),true);
+assert.equal(requiresOtherAssetsExplanation({A010:96000,A230H:4000}),false);
+assert(definitionIssues({A010:95000,A230H:5000}).some(s=>s.includes('A230J')));
+assert(definitionIssues({C150:-100}).some(s=>s.includes('C150')));
+assert.equal(definitionIssues({C150:0}).length,0);
+assert(definitionWarnings({B300:100}).some(s=>s.includes('sample-filing')));
+assert.equal(classifyExpense('Payroll taxes'),'C');
+assert.equal(classifyExpense('Payroll processing fees'),'D');
+const result={groups:{A010:95000,A230H:5000,B280:100000},issues:[],roundingDifference:0};
+const meta={date:'2026-09-30',period:'MCRQ3'};
+assert.throws(()=>exportXml(result,meta),/A230J/);
+const xml=exportXml(result,{...meta,otherAssetsExplanation:'Prepaid rent & deposits reviewed'});
+assert(xml.includes('<A230J_1>Prepaid rent &amp; deposits reviewed</A230J_1>'));
+fs.writeFileSync('/tmp/fv7-test.xml',xml);
+assert.throws(()=>exportXml(result,{...meta,otherAssetsExplanation:'a'.repeat(4001)}),/4,000/);
+console.log('FV7 threshold, sign, classification, exception guidance and escaped XML checks passed.');
+
+assert.throws(()=>exportXml(result,{...meta,otherAssetsExplanation:'5% prepaid'}),/cannot contain/);

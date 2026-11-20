@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {expenseConfidence} from './dist/expenses.mjs';
+const row={label:'Salaries',category:'B',cents:10000,source:'Page 1, line 5'};
+assert.equal(expenseConfidence(row).level,'high');
+assert.equal(expenseConfidence({...row,label:'Miscellaneous',category:'I'}).level,'low');
+assert.equal(expenseConfidence({...row,label:'Consultant',category:'H'}).level,'medium');
+assert.equal(expenseConfidence({...row,category:'C'}).level,'low');
+assert.equal(expenseConfidence({...row,category:'C',categoryReviewed:true}).level,'reviewed');
+assert.equal(expenseConfidence({...row,source:'Manual'}).level,'low');
+assert.equal(expenseConfidence({...row,cents:null}).level,'low');
+console.log('Category confidence, manual review and incomplete input checks passed.');

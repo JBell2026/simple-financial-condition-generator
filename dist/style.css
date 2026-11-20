@@ -1,0 +1,96 @@
+@font-face{font-family:Montserrat;src:url(Montserrat.ttf)}@font-face{font-family:Spartan;src:url(LeagueSpartan.ttf);font-weight:100 900}*{box-sizing:border-box}body{margin:0;background:#F7F4EC;color:#20354D;font:14px/1.6 Montserrat,sans-serif}header{max-width:1200px;margin:auto;display:flex;align-items:center;justify-content:space-between;padding:24px 36px;border-bottom:1px solid #D8D0C5}header img{width:224px;height:auto}header span{font-size:16px}main{max-width:1200px;padding:32px 36px;margin:auto}.intro{padding:4px 0 22px;max-width:850px}h1,h2{font-family:Spartan,sans-serif;line-height:1.15}h1{font-size:42px;margin:6px 0 12px}h2{font-size:25px;margin:0 0 15px}p{margin:8px 0 18px}.eyebrow{color:#985448;font-size:12px;font-weight:650;letter-spacing:2px}.card{background:white;border:1px solid #D8D0C5;border-radius:14px;padding:28px;margin-bottom:22px}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px}label{display:block;font-weight:550;font-size:12px}input,select,textarea{font:inherit;color:#20354D;border:1px solid #B3C2CA;border-radius:6px;background:white;padding:10px;width:100%;margin:6px 0 12px;font-size:13px}textarea{resize:vertical}button{border:0;border-radius:7px;color:#F7F4EC;background:#985448;font:600 13px Montserrat,sans-serif;padding:12px 18px;cursor:pointer;margin:6px 8px 0 0}button:hover{filter:brightness(.94)}button.secondary{color:#20354D;background:#CAD5DB}button:disabled{opacity:.45;cursor:wait}.upload{display:block;border:2px dashed #B3C2CA;background:#F7F4EC;text-align:center;padding:24px;font-size:16px;border-radius:10px}.upload input{max-width:460px;display:block;margin:14px auto;background:white}.upload small{display:block;font-size:12px;font-weight:400}.import-options{grid-template-columns:1fr 1fr 1fr;margin-top:18px}.inline{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:400;margin:12px 0}.inline input{width:17px;margin:0}.section-head{display:flex;justify-content:space-between;gap:24px}.section-head button{white-space:nowrap;align-self:flex-start}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:12px}th{text-align:left;background:#20354D;color:#F7F4EC;padding:12px 8px;font-weight:550}td{border-bottom:1px solid #D8D0C5;padding:8px 5px;vertical-align:middle}td input,td select{margin:0;padding:8px;font-size:12px}td:first-child input{width:16px}td:nth-child(2){min-width:190px}td:nth-child(3){min-width:120px}td:nth-child(4){min-width:230px}td:nth-child(5){min-width:115px}td:nth-child(6){font-size:10px;min-width:75px}td button{padding:6px;margin:0;background:transparent;color:#985448}tr.reference{background:#F7F4EC;color:#42505A}.totals{background:#F7F4EC;padding:18px;margin:22px 0;border-radius:8px;font-size:12px}.totals strong{font-size:20px;display:block;margin-top:6px}.notice{padding:14px 18px;border-radius:8px;background:#DFC4B8;margin:14px 0}.success{background:#CAD5DB}.notice ul{padding-left:20px;margin:6px 0}details{border-top:1px solid #D8D0C5;margin-top:18px;padding-top:14px}summary{font-weight:550;cursor:pointer}details table{margin-top:16px}details td{padding:8px}a{color:#985448}footer{display:flex;justify-content:space-between;font-size:12px;margin:24px 0}dialog{max-width:620px;border:1px solid #D8D0C5;border-radius:14px;padding:28px;color:#20354D;font-family:Montserrat,sans-serif}dialog::backdrop{background:#20354D99}.actions{display:flex;justify-content:flex-end}input:focus,select:focus,textarea:focus,button:focus-visible{outline:2px solid #985448;outline-offset:2px}@media(max-width:800px){header,main{padding:20px}.grid{grid-template-columns:1fr 1fr}.card{padding:20px}h1{font-size:34px}header img{width:180px}header span{font-size:12px}}@media(max-width:500px){.grid{grid-template-columns:1fr}.totals{grid-template-columns:1fr 1fr}.section-head{display:block}}
+header{background:#20354D;color:#F7F4EC;border-radius:0 0 14px 14px}
+
+#expenseRows td:nth-child(2){min-width:210px}#expenseRows td:nth-child(4){min-width:240px}#expenseRows td:nth-child(3){min-width:120px}.small{font-size:12px;color:#42505A}
+
+.section-divider th{font:700 19px Spartan,sans-serif;padding:16px 12px;border-top:14px solid white;letter-spacing:.3px}.section-divider.assets th{background:#20354D}.section-divider.liabilities th{background:#985448}.section-divider.equity th{background:#42505A}.calculated-row{background:#F7F4EC;font-weight:600}.calculated-row td{padding:12px 8px;border-top:1px solid #B3C2CA}.calculated-row td:first-child{border-left:4px solid #B3C2CA}.calculated-row small{font-size:10px;font-weight:400;color:#42505A}.calculated-row td:nth-child(5){white-space:nowrap}
+
+#rows .row-actions{min-width:100px;white-space:nowrap}#rows .row-actions button{padding:6px 8px;font-size:16px}#rows .row-actions button:focus-visible{outline:2px solid #985448}
+
+#review .table-wrap{position:relative}#rows .move-cell,.move-heading{position:sticky;left:0;z-index:2;min-width:146px;background:#F7F4EC;box-shadow:2px 0 4px #20354D20}.move-heading{background:#20354D;z-index:3}.move-controls{display:flex;flex-direction:column;gap:5px}.move-controls>div{display:flex;gap:5px}#rows .move-controls button{margin:0;padding:7px 8px;font-size:11px;border:1px solid #B3C2CA;background:white;color:#20354D;border-radius:5px;white-space:nowrap}#rows .move-controls .drag-handle{cursor:grab;background:#20354D;color:#F7F4EC;font-weight:600;touch-action:none}.include-line{display:flex;gap:6px;align-items:center;margin-top:7px}.include-line input{margin:0;width:16px}#rows .dragging{opacity:.45}#rows .drop-target{outline:3px solid #985448;outline-offset:-3px}#rows .row-actions{min-width:30px}
+
+/* Keep the balance-sheet review within the available page width. */
+#review .table-wrap{max-width:100%;overflow-x:visible}
+#review table{table-layout:fixed;width:100%;font-size:11px}
+#review table th,#review table td{min-width:0!important;white-space:normal;overflow-wrap:anywhere;word-break:normal;padding:8px 6px}
+#review table th:nth-child(1){width:10%}
+#review table th:nth-child(2){width:18%}
+#review table th:nth-child(3){width:12%}
+#review table th:nth-child(4){width:23%}
+#review table th:nth-child(5){width:13%}
+#review table th:nth-child(6){width:20%}
+#review table th:nth-child(7){width:4%}
+#review table input:not([type=checkbox]),#review table select{width:100%;min-width:0;max-width:100%;font-size:11px;padding:7px 4px}
+#review .move-cell,#review .move-heading{position:static;box-shadow:none}
+#review .move-controls button{width:100%;min-width:0;padding:7px 3px;font-size:10px}
+#review .include-line{font-size:10px;gap:3px;flex-wrap:wrap}
+#review .calculated-row td{white-space:normal;overflow-wrap:anywhere}
+#review .calculated-row td[data-calc]{font-variant-numeric:tabular-nums}
+#review .section-head>div:first-child{min-width:0}
+#review .section-head>div:last-child{flex-shrink:0}
+#review #mapping table th{width:auto}
+#review #mapping table th:nth-child(1){width:12%}
+#review #mapping table th:nth-child(2){width:52%}
+#review #mapping table th:nth-child(3),#review #mapping table th:nth-child(4){width:18%}
+#combinedPreview table{width:100%;table-layout:fixed}
+#combinedPreview th,#combinedPreview td{min-width:0!important;white-space:normal;overflow-wrap:anywhere}
+#combinedPreview th:first-child{width:62%}
+#combinedPreview th:not(:first-child){width:19%}
+@media(max-width:700px){
+ #review .section-head{display:block}
+ #review .card{padding:12px}
+ #review table,#review table input:not([type=checkbox]),#review table select{font-size:10px}
+ #review table th,#review table td{padding:6px 3px}
+ #review table th:nth-child(1){width:12%}
+ #review table th:nth-child(2){width:17%}
+ #review table th:nth-child(3){width:12%}
+ #review table th:nth-child(4){width:22%}
+ #review table th:nth-child(5){width:14%}
+ #review table th:nth-child(6){width:19%}
+}
+
+#review .row-detail{border:0;margin:5px 0 0;padding:0;font-size:10px;font-weight:400}#review .row-detail summary{color:#985448;font-size:10px;cursor:pointer}#review .row-detail>div{padding:7px;margin-top:4px;background:#F7F4EC;border-radius:5px;white-space:normal;overflow-wrap:anywhere;font-weight:400}#review .calculated-row .row-detail>div{background:white}#review table th:nth-child(1){width:10%}#review table th:nth-child(2){width:25%}#review table th:nth-child(3){width:13%}#review table th:nth-child(4){width:29%}#review table th:nth-child(5){width:19%}#review table th:nth-child(6){width:4%}#review #mapping table th:nth-child(1){width:12%}#review #mapping table th:nth-child(2){width:52%}#review #mapping table th:nth-child(3),#review #mapping table th:nth-child(4){width:18%}
+
+/* Larger type, consistent spacing, and clearer financial section boundaries. */
+body{font-size:15px;line-height:1.65}
+header,main{max-width:1480px;padding-left:28px;padding-right:28px}
+h1{font-size:46px}h2{font-size:29px}.card{padding:28px;margin-bottom:26px}
+label{font-size:14px}input,select,textarea{font-size:15px;padding:12px}button{font-size:14px;padding:12px 18px}
+#review table,#combinedPreview table,#expenseAllocator table{font-size:14px}
+#review table th,#review table td{padding:13px 9px;line-height:1.5}
+#review table input:not([type=checkbox]),#review table select{font-size:14px;padding:10px 7px;min-height:43px}
+#review .move-controls button{font-size:12px;padding:10px 5px;min-height:40px}
+#review .include-line{font-size:12px;gap:6px;margin-top:10px}
+#review .row-detail,#review .row-detail summary{font-size:12px}
+#review .row-detail{margin-top:8px}#review .row-detail>div{padding:10px}
+#review .calculated-row small{font-size:12px;line-height:1.5}
+#review .calculated-row td[data-calc]{font-size:15px;line-height:1.65;font-weight:650}
+#review table .section-divider th{font:700 27px/1.3 Spartan,sans-serif;padding:20px 14px;border-top:24px solid white;letter-spacing:.2px;text-align:left}
+#review .section-divider span{font:500 13px Montserrat,sans-serif;display:inline-block;margin-left:14px;letter-spacing:.3px;opacity:.95}
+#review [data-section="Assets"]>.move-cell{border-left:4px solid #20354D;background:#EEF2F4}
+#review [data-section="Liabilities"]>.move-cell{border-left:4px solid #985448;background:#F6EDE9}
+#review [data-section="Equity"]>.move-cell{border-left:4px solid #42505A;background:#F0F1EF}
+#expenseRows input,#expenseRows select{font-size:14px;padding:10px}
+#expenseRows td{padding:12px 7px}#expenseRows td:nth-child(6){font-size:12px}
+.totals{padding:22px;gap:22px;font-size:14px}.totals strong{font-size:24px}
+.small{font-size:13px}.section-head{align-items:flex-start;gap:24px}
+#review table th:nth-child(1){width:10%}#review table th:nth-child(2){width:25%}#review table th:nth-child(3){width:14%}#review table th:nth-child(4){width:28%}#review table th:nth-child(5){width:19%}#review table th:nth-child(6){width:4%}
+#review #mapping table th:nth-child(1){width:12%}#review #mapping table th:nth-child(2){width:52%}#review #mapping table th:nth-child(3),#review #mapping table th:nth-child(4){width:18%}
+@media(max-width:900px){header,main{padding-left:16px;padding-right:16px}.card{padding:20px}#review table,#review table input:not([type=checkbox]),#review table select{font-size:12px}#review table th,#review table td{padding:10px 5px}#review table .section-divider th{font-size:24px}#review .section-head{display:block}}
+
+/* Keep the editable account title and classifications on one horizontal baseline. */
+#review #rows tr[data-id]>td{vertical-align:top;padding-top:14px;padding-bottom:14px}
+#review #rows tr[data-id] input:not([type=checkbox]),#review #rows tr[data-id] select{height:44px;min-height:44px;line-height:22px;margin:0;padding:10px 7px}
+#review #rows tr[data-id] .move-controls .drag-handle{height:44px;min-height:44px;margin:0}
+#review #rows tr[data-id] .row-actions button{height:44px;min-height:44px;margin:0;display:block}
+#review #rows .row-detail{margin-top:8px}
+
+#scheduleAllocationRows td{min-width:0;overflow-wrap:anywhere}#scheduleAllocationRows select{width:100%;min-width:0}#scheduleAllocationRows td:nth-child(3){width:42%}
+
+.expense-total-row th{background:#20354d;color:#f7f4ec;padding:16px 8px;font-size:16px;border-top:3px solid #985448}
+
+.classification-box{background:#f7f4ec;border:1px solid #b3c2ca;border-radius:10px;padding:20px;margin:20px 0}.classification-box h3{font-family:Spartan,sans-serif;font-size:22px;margin:0 0 8px}.income-classification{grid-template-columns:1fr 1fr 1.4fr}.amount-preview{font-weight:650;font-size:16px;background:white;border-left:4px solid #985448;padding:14px;margin:12px 0 0}@media(max-width:800px){.income-classification{grid-template-columns:1fr}}
+/* Keep Schedule C/D labels and controls level, including wrapped labels. */
+.income-classification,.schedule-inputs{align-items:stretch}.income-classification>label,.schedule-inputs>label{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}.income-classification>label>input,.income-classification>label>select,.schedule-inputs>label>input{height:48px;min-height:48px;max-height:48px;margin:8px 0 0;box-sizing:border-box}.schedule-inputs{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:20px}#expenseRows td,#scheduleAllocationRows td{vertical-align:top}#expenseRows input:not([type=checkbox]),#expenseRows select,#scheduleAllocationRows select{height:44px;min-height:44px;margin:0}#expenseRows td button,#scheduleAllocationRows td button{min-height:44px;margin-top:0}#expenseRows .row-detail{margin-top:0;padding-top:10px}@media(max-width:500px){.schedule-inputs{grid-template-columns:1fr}}
+
+.expense-confidence{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:650;white-space:normal}.expense-confidence.high{background:#e2eee7;color:#203f31}.expense-confidence.medium{background:#f7ecd4;color:#735019}.expense-confidence.low{background:#f4dfda;color:#843f35}.expense-confidence.reviewed{background:#e4ebef;color:#20354d}#expenseRows td:nth-child(5){font-size:12px;min-width:0;width:12%}#expenseRows td:nth-child(6){min-width:0;width:9%;font-size:12px}#expenseRows td:nth-child(7){width:4%}
