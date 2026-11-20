@@ -35,3 +35,7 @@ assert.equal(amountColumns(corpus.qbo.bs.split('\n')).count,1);assert.equal(amou
 assert.match(selectAmountColumn({text:'Checking  12,000.00  9,000.00',source:'x'},1).text,/^Checking\s+9,000\.00$/);assert.match(selectAmountColumn({text:'Checking  12,000.00  9,000.00',source:'x'},0).text,/^Checking\s+12,000\.00$/);
 const paged=selectAmountsByPage([{text:'  Sep 30, 2026  Dec 31, 2025',page:1},{text:'Checking  5.00  4.00',page:1},{text:'Savings  2.00  1.00',page:1},{text:'  Jan  Feb  Total',page:2},{text:'Rent  1.00  2.00  3.00',page:2},{text:'Phone  1.00  2.00  3.00',page:2}]);assert.match(paged[1].text,/5\.00$/);assert.match(paged[4].text,/3\.00$/);
 console.log('QuickBooks Online/Desktop, Xero, CPA-prepared, comparative and management-package layouts import, foot and reconcile.');
+// Page picker helpers: labels come from statement titles; one page can be read alone.
+{const {pageList,onlyPage}=await import('./dist/balance-source.mjs');const lines=[{text:'Acme LLC',page:1},{text:'Statement of Operations',page:1},{text:'Rent  5.00',page:1},{text:'Acme LLC',page:2},{text:'Balance Sheet: as of September 30, 2026',page:2},{text:'12/31',page:3},{text:'Notes to management',page:3}];
+ assert.deepEqual(pageList(lines).map(p=>[p.page,p.label]),[[1,'Statement of Operations'],[2,'Balance Sheet: as of September 30, 2026'],[3,'Notes to management']]);assert.equal(onlyPage(lines,'2').length,2);assert.equal(onlyPage(lines,'all').length,7);assert.deepEqual(pageList([{text:'x'}]),[]);}
+console.log('Page picker helpers passed.');

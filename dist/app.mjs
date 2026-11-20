@@ -1,5 +1,5 @@
 import {calculatedReview,calculations,filingCompare,orderedReview} from './calculated.mjs';
-import {balanceSheetSource,isBalanceSheetName} from './balance-source.mjs';
+import {balanceSheetSource,isBalanceSheetName,pageOptions,onlyPage} from './balance-source.mjs';
 import {guide,sourceLink,definitionWarnings,definitionIssues,requiresOtherAssetsExplanation} from './fv7.mjs';
 import {mountCombined} from './combined.mjs';
 import {mountAllocator} from './expenses.mjs';
@@ -79,8 +79,10 @@ $('rows').addEventListener('pointercancel',clearDrag);
 $('rows').addEventListener('keydown',e=>{if(e.key==='Escape')clearDrag();});
 $('restoreOrder').onclick=()=>{sectionOrder={};table();$('moveStatus').textContent='NMLS filing order restored.';};
 $('add').onclick=()=>{rows.push({id:Math.max(0,...rows.map(r=>r.id))+1,label:'New account',cents:0,section:'Assets',code:'',include:true,source:'Manual'});resetReview();table();};
-function loadLines(lines,sheetName=''){
- const source=balanceSheetSource(lines,{sheetName});
+function loadLines(lines,sheetName='',{forced=false}={}){
+ let source=balanceSheetSource(lines,{sheetName});
+ // A page the user picked is read even when it carries no recognizable balance sheet title.
+ if(forced&&!source.matched)source={lines:[{text:'Balance Sheet',source:'Selected page'},...lines],excluded:[],supplements:[],matched:1};
  sectionOrder={};
  const result=parseLines(source.lines,{supplements:source.supplements.map(selectAmounts)});rows=result.rows;controls=result.controls;importNotes=result.notes;
  if(source.excluded.length)importNotes.push('Excluded '+source.excluded.length+' page(s) or source sections that are not balance sheet sections.');
@@ -93,7 +95,7 @@ function selectAmounts(lines){const v=$('amountColumn').value;return selectAmoun
 // Offer a column choice when the balance sheet shows more than one amount per account.
 // The worksheet and amount-column choices appear only when there is a real choice:
 // an Excel file with several sheets, or a statement with several amount columns.
-function showImportChoices(){$('sheet').closest('label').hidden=!workbook||$('sheet').options.length<2;$('amountColumn').closest('label').hidden=$('amountColumn').disabled;}
+function showImportChoices(){$('bsPage').closest('label').hidden=!!workbook||$('bsPage').options.length<3;$('sheet').closest('label').hidden=!workbook||$('sheet').options.length<2;$('amountColumn').closest('label').hidden=$('amountColumn').disabled;}
 function showAmountColumns(lines){
  const source=balanceSheetSource(lines).lines,info=amountColumns(source.length?source:lines);
  $('amountColumn').innerHTML='<option value="auto">Automatic — '+(info.count>1?(info.index>=0?'latest period ('+escape(info.labels[info.index])+')':'Total / rightmost column'):'single amount column')+'</option>'+(info.count>1?Array.from({length:info.count},(_,i)=>'<option value="'+i+'">Column '+(i+1)+(info.labels[i]?' — '+escape(info.labels[i]):'')+'</option>').join(''):'');
@@ -101,7 +103,8 @@ function showAmountColumns(lines){
 }
 $('amountColumn').onchange=()=>{try{if(workbook)loadLines(selectAmounts(rawLines),$('sheet').value);else if(rawLines.length)importPdfLines();}catch(e){status(e.message);}};
 
-function importPdfLines(){const selected=selectAmounts(rawLines);$('raw').value=selected.map(l=>l.text).join('\n');loadLines(selected);}
+function importPdfLines(){const page=$('bsPage').value,selected=selectAmounts(onlyPage(rawLines,page));$('raw').value=selected.map(l=>l.text).join('\n');loadLines(selected,'',{forced:page!=='all'});if(page!=='all')status(`${rows.filter(r=>r.include).length} detail lines read from page ${page} of ${fileName} only.`);}
+$('bsPage').onchange=()=>{try{showAmountColumns(onlyPage(rawLines,$('bsPage').value));importPdfLines();if($('bsPage').value==='all')status(`${rows.filter(r=>r.include).length} detail lines extracted from ${fileName}. Review every extracted line.`);}catch(e){status(e.message);}};
 async function pdfLines(file,progress=status,options={}){
  const doc=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false}).promise;
  let lines=[],worker;
@@ -160,9 +163,9 @@ $('sheet').onchange=()=>{try{excelLines();}catch(e){status(e.message);}};
 
 $('file').onchange=async()=>{
  const file=$('file').files[0];if(!file)return;if(file.size>40*1024*1024){status('Please upload a file under 40 MB.');return;}
- setBusy(true);resetReview();sectionOrder={};rows=[];controls={};table();workbook=null;fileName=file.name;status('Reading '+file.name+'…');
+ setBusy(true);resetReview();sectionOrder={};rows=[];controls={};table();workbook=null;fileName=file.name;$('bsPage').innerHTML='<option value="all">All pages (automatic)</option>';status('Reading '+file.name+'…');
  try{
-  if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);showAmountColumns(rawLines);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
+  if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);$('bsPage').innerHTML=pageOptions(rawLines,escape).html;showAmountColumns(rawLines);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
   else if(/\.(xlsx|xls|csv)$/i.test(file.name)){workbook=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false,raw:/\.csv$/i.test(file.name)});$('sheet').innerHTML=workbook.SheetNames.map(s=>`<option>${escape(s)}</option>`).join('');const match=workbook.SheetNames.find(s=>isBalanceSheetName(s));if(match)$('sheet').value=match;excelLines();}
   else throw Error('Choose PDF, XLSX, XLS, or CSV.');
   if(!$('company').value){const first=rawLines.find(l=>l.text.trim());if(first&&!/assets|balance sheet/i.test(first.text)&&first.text.length<130)$('company').value=first.text.trim();}
