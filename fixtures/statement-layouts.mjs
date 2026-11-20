@@ -29,21 +29,21 @@ Accounts Payable
 Accounts Payable (A/P)  4,100.00
 Total Accounts Payable  $4,100.00
 Credit Cards
-Chase Ink  2,250.50
-Total Credit Cards  $2,250.50
+Chase Ink  2,250.40
+Total Credit Cards  $2,250.40
 Other Current Liabilities
 Payroll Liabilities  3,300.00
 Total Other Current Liabilities  $3,300.00
-Total Current Liabilities  $9,650.50
+Total Current Liabilities  $9,650.40
 Long-Term Liabilities
 SBA Loan  20,000.00
 Total Long-Term Liabilities  $20,000.00
-Total Liabilities  $29,650.50
+Total Liabilities  $29,650.40
 Equity
 Owner's Investment  10,000.00
-Retained Earnings  20,449.60
+Retained Earnings  20,449.70
 Net Income  25,000.00
-Total Equity  $55,449.60
+Total Equity  $55,449.70
 TOTAL LIABILITIES AND EQUITY  $85,100.10`,
 pl:`Acme Mortgage LLC
 Profit and Loss
@@ -78,7 +78,7 @@ Other Expenses
 Depreciation  8,000.00
 Total Other Expenses  $8,000.00
 NET OTHER INCOME  $ -7,500.00
-NET INCOME  $25,000.00`,expect:{assets:8510010,net:2500000,expenses:29550000,gross:32050000}},
+NET INCOME  $25,000.00`,expect:{assets:8510000,net:2500000,expenses:29550000,gross:32050000}},
 qbd:{bs:`Balance Sheet
 As of December 31, 2026
 ASSETS

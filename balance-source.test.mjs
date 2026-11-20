@@ -25,11 +25,12 @@ if(process.argv[2]){
 }
 console.log('Balance Sheet title, page boundaries, worksheet titles and cash-flow isolation checks passed.');
 const cash=parseLines(['Balance Sheet','Assets','Cash & Equivalents','SVB MCM Checking $726,086.75','Mercury MCM Checking - 5892 $151,200.17','Mercury MCM Treasury $523,657.54','First Bank $138,429.20','Total Cash & Equivalents $1,539,373.66','Other Current Assets','Unmapped $1.00']);
-assert.equal(fieldSum(cash,'A010'),153937366);
-assert.equal(cash.controls.A010,153937366);
+// Amounts are rounded to whole dollars when read; the Source detail keeps the cents.
+assert.equal(fieldSum(cash,'A010'),153937400);
+assert.equal(cash.controls.A010,153937400);assert.deepEqual(cash.rows.filter(r=>r.code==='A010').map(r=>r.cents),[72608700,15120000,52365800,13842900]);
 assert(cash.rows.filter(r=>r.code==='A010').some(r=>r.source.includes('First Bank $138,429.20')));
 const {reconcile}=await import('./dist/engine.mjs');
-assert(reconcile(cash.rows,{A010:153937367}).issues.some(s=>s.includes('cash subtotal')));
+assert(reconcile(cash.rows,{A010:153000000}).issues.some(s=>s.includes('cash subtotal')));
 console.log('Cash subsection includes all four accounts, excludes subtotal duplication, and validates source subtotal.');
 
 const alternateStatementPages=[

@@ -1,7 +1,7 @@
 import {readScheduleWorkbook,dReviewRows,incomeSplit} from './schedule-d.mjs';
 import {calculatedReview,orderedReview} from './calculated.mjs';
 import {guide,sourceLink,definitionIssues,definitionWarnings} from './fv7.mjs';
-import {amount,rounded,fields,reconcile,exportXml,scheduleOFields,usd} from './engine.mjs';
+import {amount,rounded,fields,reconcile,exportXml,scheduleOFields,usd,wholeCents} from './engine.mjs';
 import {fcSchema} from './fc-schema.mjs';
 const columnCodes=['D050',null,'D150','D160','D200','D210','D220','D230','D280','C150'];
 export function readSfc(book,options={}){
@@ -10,7 +10,7 @@ export function readSfc(book,options={}){
  if(!match)throw Error('The SFC worksheet mapping row (D050 through C150) was not found. Upload the completed SFC template.');
  const [name,s]=match;const mapping=Object.entries(s).find(([key,c])=>/^A\d+$/.test(key)&&String(c.v).trim().toUpperCase()==='D050');const mapRow=Number(mapping[0].slice(1)),totalRow=mapRow-1,shift=totalRow-21;
  if(totalRow<4||totalRow>100)throw Error('Unrecognized SFC worksheet layout.');
- function value(address,required=false){const c=s[address];if(c?.t==='e')throw Error('Excel error in '+name+'!'+address+'.');const n=amount(c?.v);if(required&&n===null)throw Error('Complete '+name+'!'+address+' before generating XML.');return n;}
+ function value(address,required=false){const c=s[address];if(c?.t==='e')throw Error('Excel error in '+name+'!'+address+'.');const n=wholeCents(amount(c?.v));if(required&&n===null)throw Error('Complete '+name+'!'+address+' before generating XML.');return n;}
  const groups={},issues=[],categoryTotals=[];let entries=0;
  for(let col=0;col<10;col++){
   const letter=String.fromCharCode(65+col);let sum=0,count=0;
@@ -77,10 +77,10 @@ export function mountCombined(getMeta,getBalance,getSchedule){
  $('reviewCombined').onclick=async()=>{
   reset();const sf=$('completedSfc').files[0],meta=getMeta();const direct=$('fcInputSource').value==='app';if(!direct&&!sf){$('combinedStatus').textContent='Upload the completed workbook first.';return;}if(!meta.company||!meta.date){$('combinedStatus').textContent='Enter the company name and select the reporting year and period in Client & reporting details.';return;}if(sf&&sf.size>40*1024*1024){$('combinedStatus').textContent='Choose files under 40 MB.';return;}
   $('reviewCombined').disabled=true;try{
-   const sfc=direct?getSchedule():readSfc(XLSX.read(await sf.arrayBuffer(),{type:'array'}),{payrollField:$('payrollField').value,incomeField:$('incomeField').value,incomeSplit:$('splitRevenue').checked?{field:$('incomeField2').value,cents:amount($('incomeSplitAmount').value)}:null});const balance=getBalance();reviewed=combineReports(balance,sfc,meta);
+   const sfc=direct?getSchedule():readSfc(XLSX.read(await sf.arrayBuffer(),{type:'array'}),{payrollField:$('payrollField').value,incomeField:$('incomeField').value,incomeSplit:$('splitRevenue').checked?{field:$('incomeField2').value,cents:wholeCents(amount($('incomeSplitAmount').value))}:null});const balance=getBalance();reviewed=combineReports(balance,sfc,meta);
    reviewed.metadata=JSON.stringify(meta);
    const headers='<table><thead><tr><th>NMLS field</th><th>Original amount</th><th>XML amount</th></tr></thead><tbody>';
-   $('combinedPreview').innerHTML='<p>'+esc(definitionWarnings(balance.groups).join(' '))+'</p><p>Gross income source: '+esc(sfc.grossSource)+'</p>'+headers+Object.entries(reviewed.result.groups).filter(([c])=>!fields[c]).sort().map(([c,v])=>'<tr><td>'+c+'<br><small>'+esc(guide(c))+' <a href="'+sourceLink(c)+'" target="_blank" rel="noopener">FV7</a></small></td><td>$'+(v/100).toFixed(2)+'</td><td>'+rounded(v)+'</td></tr>').join('')+'</tbody></table>';
+   $('combinedPreview').innerHTML='<p>'+esc(definitionWarnings(balance.groups).join(' '))+'</p><p>Gross income source: '+esc(sfc.grossSource)+'</p>'+headers+Object.entries(reviewed.result.groups).filter(([c])=>!fields[c]).sort().map(([c,v])=>'<tr><td>'+c+'<br><small>'+esc(guide(c))+' <a href="'+sourceLink(c)+'" target="_blank" rel="noopener">FV7</a></small></td><td>'+usd(v)+'</td><td>'+rounded(v)+'</td></tr>').join('')+'</tbody></table>';
    $('combinedPreview').innerHTML+='<h3>Balance sheet in NMLS filing order</h3>'+headers+['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="3">'+section+'</th></tr>'+orderedReview(balance.groups).filter(r=>r.section===section).map(r=>'<tr class="calculated-row"><td>'+r.code+' — '+esc(r.label)+'<br><small>'+esc(r.formula||'Input')+'</small></td><td>'+usd(r.cents)+'</td><td>'+r.whole+'</td></tr>').join('')).join('')+'</tbody></table><p class="small">Calculated checks are review only; unassigned inputs count as zero.</p>';
    if(sfc.calculated)$('combinedPreview').innerHTML+='<h3>Schedules C & D filing review</h3>'+headers+dReviewRows(sfc).map(r=>'<tr class="'+(r.deps?'calculated-row':'')+'"><td>'+r.code+' — '+esc(r.label)+'</td><td>'+usd(r.cents)+'</td><td>'+r.whole+'</td></tr>').join('')+'</tbody></table>';
    $('combinedPreview').innerHTML+='<h3>Schedule O</h3><p>All '+scheduleOFields.length+' Schedule O fields ('+scheduleOFields[0].replace('_1','')+' through '+scheduleOFields.at(-1).replace('_1','')+') are included in the XML as 0.</p>';

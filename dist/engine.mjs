@@ -33,7 +33,11 @@ export function tidyLabel(label){
  }).replace(/\(K\)/g,'(k)');
 }
 // Dollar amounts in messages: $1,234.56, with a leading minus when negative.
-export const usd=cents=>(cents<0?'-':'')+'$'+(Math.abs(cents)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+// The app works in whole dollars: amounts are rounded to the nearest dollar when read
+// or typed, and shown without cents. Only the Source detail keeps the statement's cents.
+export const wholeCents=cents=>Number.isFinite(cents)?Math.sign(cents)*Math.round(Math.abs(cents)/100)*100:cents;
+export const usd=cents=>(cents<0?'-':'')+'$'+Math.round(Math.abs(cents)/100).toLocaleString('en-US');
+export const usdExact=cents=>(cents<0?'-':'')+'$'+(Math.abs(cents)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const plural=(n,word,many=word+'s')=>n+' '+(n===1?word:many);
 export {plural};
 export function rounded(cents){return Math.sign(cents)*Math.round(Math.abs(cents)/100);}
@@ -241,11 +245,11 @@ export function parseLines(lines,{supplements=[]}={}){
   }
   // Every detail account is kept. An account without a recognized NMLS field stays in
   // the review as unclassified instead of being dropped, so the statement still foots.
-  rows.push({id:rows.length+1,label:shown,cents,section,code,basis,include:fixedTotal||!total,source:label+' '+usd(cents)+' ('+source+')'+(basis.startsWith('group')?' — suggested from '+basis:''),total:false,fixedTotal});
+  rows.push({id:rows.length+1,label:shown,cents,section,code,basis,include:fixedTotal||!total,source:label+' '+usdExact(cents)+' ('+source+')'+(basis.startsWith('group')?' — suggested from '+basis:''),total:false,fixedTotal});
  }
  // Every account stays on its own line, as on the statement. Accounts that share an
  // NMLS field are added together only in the field totals and the review's net lines.
- const kept=rows.filter(r=>r.include);
+ const kept=rows.filter(r=>r.include);for(const r of kept)r.cents=wholeCents(r.cents);for(const key of Object.keys(controls))controls[key]=wholeCents(controls[key]);
  return {rows:[...kept.filter(r=>r.code),...kept.filter(r=>!r.code)],controls,notes,skipped};
 }
 export function reconcile(rows,controls={}){

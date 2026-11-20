@@ -1,4 +1,4 @@
-import {amount,rounded,moneyMatches,selectTotalAmountLine,usd} from './engine.mjs';
+import {amount,rounded,moneyMatches,selectTotalAmountLine,usd,wholeCents} from './engine.mjs';
 export const dFields=[
  ['D010','Loan production officers / sales','B','Personnel'],['D020','Loan origination / non-sales staff','B','Personnel'],['D030','Warehousing / secondary marketing staff','B','Personnel'],['D040','Post-close / production support staff','B','Personnel'],['D050','Origination management and directors','A','Personnel'],['D060','Other origination personnel','B','Personnel'],['D080','Servicing management and directors','B','Personnel'],['D090','Other servicing personnel','B','Personnel'],['D110','Investment portfolio personnel','B','Personnel'],['D120','Contra: personnel expenses reclassified / deferred','B','Personnel'],
  ['D150','Benefits, training and payroll taxes','C','Personnel'],['D160','Other personnel expenses','D','Personnel'],
@@ -58,6 +58,7 @@ export function extractPLFigures(lines){
  }
  if(revenue!==undefined&&result.gross===undefined)result.gross=revenue+(otherIncome??0);
  else{if(result.gross===undefined&&revenueCount)result.gross=revenueSum;if(result.gross!==undefined&&otherIncomeTotal!==undefined)result.gross+=otherIncomeTotal;}
+ for(const key of Object.keys(result))result[key]=wholeCents(result[key]);
  return result;
 }
 export const incomeFields=['C210','C220','C230','C240','C770'];
@@ -89,7 +90,7 @@ export function buildScheduleD(rows,options={}){
  const expenses=values.D310,net=values.D600;
  if(Number.isSafeInteger(reportedNet)&&Number.isSafeInteger(gross)){
   if(net!==reportedNet)issues.push('Calculated D600 differs from P&L net income by '+usd(net-reportedNet)+'.');
-  if(whole.D600!==rounded(reportedNet))issues.push('Whole-dollar D600 differs from rounded P&L net income by '+usd((whole.D600-rounded(reportedNet))*100)+'.');
+  if(whole.D600!==rounded(reportedNet)&&(whole.D600-rounded(reportedNet))*100!==net-reportedNet)issues.push('Whole-dollar D600 differs from rounded P&L net income by '+usd((whole.D600-rounded(reportedNet))*100)+'.');
  }
  if(rounded(expenses)!==whole.D310)issues.push('Expense fields have a whole-dollar rounding difference of '+usd((whole.D310-rounded(expenses))*100)+'.');
  if(Number.isSafeInteger(gross)&&whole.C800!==rounded(gross))issues.push('Gross income fields have a whole-dollar rounding difference.');
@@ -113,8 +114,8 @@ export function addScheduleWorkbook(wb,rows,report,meta){
 }
 export function readScheduleWorkbook(book){
  const setup=book.Sheets['Schedule D Setup'],sheet=book.Sheets['Schedule D Lines'];if(!setup||!sheet||setup.B1?.v!=='Simple Schedule D v1')throw Error('Unrecognized Schedule D workbook.');
- const val=(cell,required=false,strict=true)=>{if(cell?.t==='e')throw Error('Resolve Excel errors in Schedule D Setup.');const n=amount(cell?.v);if(strict&&cell?.v!==undefined&&String(cell.v).trim()!==''&&n===null)throw Error('Invalid amount in the completed Schedule D workbook.');if(required&&n===null)throw Error('Complete the gross income and final net income in Schedule D Setup.');return n;};
- const rows=[];for(let i=2;i<=1000;i++){const field=String(sheet['A'+i]?.v||'').trim().toUpperCase(),label=String(sheet['B'+i]?.v||'').trim(),cell=sheet['C'+i];if(!field&&!label&&(cell?.v===undefined||cell.v===''))continue;if(cell?.t==='e')throw Error('Excel error in Schedule D Lines row '+i+'.');const include=String(sheet['E'+i]?.v??'Yes').trim();if(!/^(yes|no)$/i.test(include))throw Error('Use Yes or No in the Schedule D Lines Include column, row '+i+'.');rows.push({field,label:label||field,cents:amount(cell?.v),source:sheet['D'+i]?.v||'Excel row '+i,include:!/^no|false|0$/i.test(include)});}
+ const val=(cell,required=false,strict=true)=>{if(cell?.t==='e')throw Error('Resolve Excel errors in Schedule D Setup.');const n=wholeCents(amount(cell?.v));if(strict&&cell?.v!==undefined&&String(cell.v).trim()!==''&&n===null)throw Error('Invalid amount in the completed Schedule D workbook.');if(required&&n===null)throw Error('Complete the gross income and final net income in Schedule D Setup.');return n;};
+ const rows=[];for(let i=2;i<=1000;i++){const field=String(sheet['A'+i]?.v||'').trim().toUpperCase(),label=String(sheet['B'+i]?.v||'').trim(),cell=sheet['C'+i];if(!field&&!label&&(cell?.v===undefined||cell.v===''))continue;if(cell?.t==='e')throw Error('Excel error in Schedule D Lines row '+i+'.');const include=String(sheet['E'+i]?.v??'Yes').trim();if(!/^(yes|no)$/i.test(include))throw Error('Use Yes or No in the Schedule D Lines Include column, row '+i+'.');rows.push({field,label:label||field,cents:wholeCents(amount(cell?.v)),source:sheet['D'+i]?.v||'Excel row '+i,include:!/^no|false|0$/i.test(include)});}
  if(Object.entries(sheet).some(([key,cell])=>/^[A-E](\d+)$/.test(key)&&Number(key.match(/\d+/)[0])>1000&&cell?.v!==undefined&&cell.v!==''))throw Error('Schedule D Lines exceeds 999 worksheet rows.');
  let gross=val(setup.B5),reportedNet=val(setup.B7),grossSource='Schedule D Setup!B5';
  for(const [name,s]of Object.entries(book.Sheets)){const map=Object.entries(s).find(([key,c])=>/^A\d+$/.test(key)&&String(c.v).trim().toUpperCase()==='D050');if(map){const shift=Number(map[0].slice(1))-22,address='B'+(36+shift),override=val(s[address],false,false);if(override!==null){gross=override;grossSource=name+'!'+address;}else if(gross===null){gross=val(s['L'+(26+shift)]);grossSource=name+'!L'+(26+shift);}if(reportedNet===null)reportedNet=val(s['L'+(28+shift)]);break;}}

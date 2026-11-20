@@ -46,9 +46,17 @@ console.log('Page picker helpers passed.');
  const caps=parseLines(['BALANCE SHEET','ASSETS','CASH IN BANK  $100.00','DUE FROM OFFICER  $50.00','TOTAL ASSETS  $150.00','LIABILITIES','AMEX  $30.00','EQUITY','RETAINED EARNINGS  $120.00']);
  assert.deepEqual(caps.rows.map(r=>[r.label,r.code]),[['Cash in Bank','A010'],['Due from Officer','A190'],['Retained Earnings','B280'],['AMEX','']]);assert(!caps.rows.some(r=>/[A-Z]{5}/.test(r.label)));assert(caps.rows[0].source.includes('CASH IN BANK $100.00'));
  assert.deepEqual(parseExpenses(['PROFIT AND LOSS','EXPENSES','RENT  $50.00','OFFICER SALARY  $90.00','TOTAL EXPENSES  $140.00']).map(r=>r.label),['Rent','Officer Salary']);
- assert.equal(usd(123456),'$1,234.56');assert.equal(usd(-100),'-$1.00');}
+ assert.equal(usd(123456),'$1,235');assert.equal(usd(-100),'-$1');}
 console.log('Capitalization and amount formatting passed.');
 // Accounts sharing an NMLS field stay on separate lines; only the field total combines them.
 {const oa=parseLines(['Balance Sheet','Assets','Cash  $100.00','Other Assets','Other Assets  $53.00','Accumulated Amortization  ($20.00)','Net Other Assets  $33.00','Rent Deposit  $10.00','Total Assets  $143.00','Equity','Retained Earnings  $143.00']);
  assert.deepEqual(oa.rows.filter(r=>r.code==='A230H').map(r=>[r.label,r.cents]),[['Other Assets',5300],['Accumulated Amortization',-2000],['Rent Deposit',1000]]);const r=reconcile(oa.rows,oa.controls);assert.deepEqual(r.issues,[]);assert.equal(r.groups.A230H,4300);}
 console.log('Separate account lines per NMLS field passed.');
+// Whole dollars: amounts are rounded when read, half away from zero, and the statement's
+// cents survive only in the Source detail.
+{const {wholeCents,usdExact}=await import('./dist/engine.mjs');assert.equal(wholeCents(12349),12300);assert.equal(wholeCents(12350),12400);assert.equal(wholeCents(-12350),-12400);assert.equal(wholeCents(null),null);assert.equal(usdExact(123456),'$1,234.56');
+ const c=parseLines(['Balance Sheet','Assets','Cash  $1,000.49','Deposits  $10.50','Total Assets  $1,010.99','Equity','Retained Earnings  $1,010.99']);
+ assert.deepEqual(c.rows.map(r=>r.cents),[100000,1100,101100]);assert(c.rows[0].source.includes('$1,000.49'));assert.equal(c.controls.assets,101100);assert(c.rows.every(r=>r.cents%100===0));
+ const e=parseExpenses(['Profit and Loss','Cost of Revenue','Commissions  $500.60','Expenses','Rent  $1,200.49','Software  $99.50','Net Income  $10.00'],true);assert.deepEqual(e.map(r=>r.cents),[50100,120000,10000]);assert.equal(e.costOfRevenue.total,50100);
+ assert.deepEqual(extractPLFigures(['Profit and Loss','Total Income  $5,000.55','Interest Income  $10.49','Net Income  $2,999.50']),{gross:500100,interest:1000,reportedNet:300000});}
+console.log('Whole-dollar rounding passed.');
