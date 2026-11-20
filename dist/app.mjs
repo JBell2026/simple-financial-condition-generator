@@ -42,10 +42,10 @@ function table(){
  // With subtotals hidden, each section lists its accounts and ends with its totals.
  // A field fed by several statement lines (for example fixed asset cost and accumulated
  // depreciation) gets a net line after its last account, showing what NMLS receives.
- const withNets=items=>{const counts={};for(const r of items)if(!r.deps&&r.include&&r.code)counts[r.code]=(counts[r.code]||0)+1;const last={};items.forEach((r,i)=>{if(!r.deps&&r.include&&counts[r.code]>1)last[r.code]=i;});return items.flatMap((r,i)=>last[r.code]===i&&!r.deps?[r,{net:r.code}]:[r]);};
- const renderNet=code=>'<tr class="calculated-row field-net"><td></td><td>Net '+escape(fields[code][0].replace(/,?\s*net$/i,'').toLowerCase())+'</td><td>'+code+' <small>sent to NMLS</small></td><td data-net="'+code+'"></td><td></td></tr>';
+ const withNets=items=>{const counts={};for(const r of items)if(!r.deps&&r.include&&r.code)counts[r.code]=(counts[r.code]||0)+1;const last={};items.forEach((r,i)=>{if(!r.deps&&r.include&&counts[r.code]>1)last[r.code]=i;});return items.flatMap((r,i)=>last[r.code]===i&&!r.deps?[r,{net:r.code,contra:items.some(x=>!x.deps&&x.include&&x.code===r.code&&x.cents<0)&&items.some(x=>!x.deps&&x.include&&x.code===r.code&&x.cents>0)}]:[r]);};
+ const renderNet=(code,contra)=>'<tr class="calculated-row field-net"><td></td><td>'+(contra?'Net ':'Total ')+escape(fields[code][0].replace(/,?\s*net$/i,'').toLowerCase())+'</td><td>'+code+' <small>sent to NMLS</small></td><td data-net="'+code+'"></td><td></td></tr>';
  const layout=section=>{const items=sectionLayout(section);return withNets(subtotals?items:[...items.filter(r=>!r.deps),...items.filter(r=>r.deps)]);};
- $('rows').innerHTML=['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="5" scope="rowgroup">'+section+' <span>Schedule '+(section==='Assets'?'A':'B')+'</span></th></tr>'+layout(section).map(r=>r.net?renderNet(r.net):r.deps?renderCalc(r):renderRow(r)).join('')).join('');
+ $('rows').innerHTML=['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="5" scope="rowgroup">'+section+' <span>Schedule '+(section==='Assets'?'A':'B')+'</span></th></tr>'+layout(section).map(r=>r.net?renderNet(r.net,r.contra):r.deps?renderCalc(r):renderRow(r)).join('')).join('');
  $('empty').hidden=rows.length>0;$('restoreOrder').hidden=!Object.keys(sectionOrder).length;checks();
 }
 $('showSubtotals').onchange=table;

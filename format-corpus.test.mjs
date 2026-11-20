@@ -47,3 +47,7 @@ console.log('Page picker helpers passed.');
  assert.deepEqual(parseExpenses(['PROFIT AND LOSS','EXPENSES','RENT  $50.00','OFFICER SALARY  $90.00','TOTAL EXPENSES  $140.00']).map(r=>r.label),['Rent','Officer Salary']);
  assert.equal(usd(123456),'$1,234.56');assert.equal(usd(-100),'-$1.00');}
 console.log('Capitalization and amount formatting passed.');
+// Accounts sharing an NMLS field stay on separate lines; only the field total combines them.
+{const oa=parseLines(['Balance Sheet','Assets','Cash  $100.00','Other Assets','Other Assets  $53.00','Accumulated Amortization  ($20.00)','Net Other Assets  $33.00','Rent Deposit  $10.00','Total Assets  $143.00','Equity','Retained Earnings  $143.00']);
+ assert.deepEqual(oa.rows.filter(r=>r.code==='A230H').map(r=>[r.label,r.cents]),[['Other Assets',5300],['Accumulated Amortization',-2000],['Rent Deposit',1000]]);const r=reconcile(oa.rows,oa.controls);assert.deepEqual(r.issues,[]);assert.equal(r.groups.A230H,4300);}
+console.log('Separate account lines per NMLS field passed.');

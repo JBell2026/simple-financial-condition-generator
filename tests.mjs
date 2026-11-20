@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {amount,rounded,parseLines,reconcile,exportXml} from './dist/engine.mjs';
+// Accounts are no longer merged per NMLS field, so field amounts are summed here.
+const fieldSum=(result,code)=>result.rows.filter(r=>r.code===code).reduce((total,r)=>total+r.cents,0);
 assert.equal(amount('$-1,019.00'),-101900);
 assert.equal(amount('(1,019.00)'),-101900);
 assert.equal(amount('NA'),null);
@@ -19,13 +21,13 @@ const mapped=parseLines(['Assets','Equipment $200.00','Accumulated Depreciation 
  const zero=parseLines(['Balance Sheet','Assets','Checking $100.00','Fixed Assets','Property and Equipment $29,000.00','Accumulated Depreciation ($29,000.00)','Net Fixed Assets $0.00','Total Assets $100.00','Equity','Retained Earnings $100.00']);assert.deepEqual(zero.rows.filter(r=>r.code==='A180').map(r=>r.cents),[2900000,-2900000]);const zr=reconcile(zero.rows,zero.controls);assert.deepEqual(zr.issues,[]);assert.equal(zr.groups.A180,0);
  const wrong=parseLines(['Assets','Equipment $200.00','Accumulated Depreciation $-50.00','Total Fixed Assets $175.00']);assert(reconcile(wrong.rows,wrong.controls).issues.some(s=>s.includes('net fixed assets')));
  const only=parseLines(['Assets','Net fixed assets $120.00']);assert.deepEqual(only.rows.map(r=>[r.code,r.cents]),[['A180',12000]]);assert.equal(only.controls.fixedAssets,undefined);}
-assert.equal(mapped.rows.find(r=>r.code==='A010').cents,3000);
+assert.equal(fieldSum(mapped,'A010'),3000);
 // An unrecognized account stays in the review, unclassified, instead of being dropped.
-assert.equal(mapped.rows.length,4);const unmapped=mapped.rows.find(r=>r.label==='Unmapped account');assert.equal(unmapped.code,'');assert.equal(unmapped.include,true);assert.equal(unmapped.cents,4000);assert(reconcile(mapped.rows).issues.some(s=>s.includes('Review the NMLS classification: Unmapped account')));
+assert.equal(mapped.rows.length,5);assert.deepEqual(mapped.rows.filter(r=>r.code==='A010').map(r=>r.label),['Checking','Savings']);const unmapped=mapped.rows.find(r=>r.label==='Unmapped account');assert.equal(unmapped.code,'');assert.equal(unmapped.include,true);assert.equal(unmapped.cents,4000);assert(reconcile(mapped.rows).issues.some(s=>s.includes('Review the NMLS classification: Unmapped account')));
 
 const equity=parseLines(['Equity','Retained Earnings $100.00','Net Income $26,995.82','Net Profit $4.18']);
-assert.equal(equity.rows.find(r=>r.code==='B280').cents,10000);
-assert.equal(equity.rows.find(r=>r.code==='B300').cents,2700000);
+assert.equal(fieldSum(equity,'B280'),10000);
+assert.equal(fieldSum(equity,'B300'),2700000);
 const xml=exportXml(r,{date:'2026-09-30',period:'MCRQ3'});
 assert(xml.includes('<Mcr formVersion="v7" type="E" year="2026" periodType="MCRQ3">'));
 assert(xml.includes('<A010_1>1000</A010_1>'));

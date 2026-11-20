@@ -243,14 +243,10 @@ export function parseLines(lines,{supplements=[]}={}){
   // the review as unclassified instead of being dropped, so the statement still foots.
   rows.push({id:rows.length+1,label:shown,cents,section,code,basis,include:fixedTotal||!total,source:label+' '+usd(cents)+' ('+source+')'+(basis.startsWith('group')?' — suggested from '+basis:''),total:false,fixedTotal});
  }
- const grouped=new Map();
- for(const row of rows.filter(r=>r.include&&r.code)){
-  const previous=grouped.get(row.code);
-  if(row.code==='A180'){grouped.set('A180:'+row.id,{...row});continue;}
-  if(previous){previous.cents+=row.cents;previous.label=fields[row.code][0];previous.source+='; '+row.source;}
-  else grouped.set(row.code,{...row});
- }
- return {rows:[...grouped.values(),...rows.filter(r=>r.include&&!r.code)],controls,notes,skipped};
+ // Every account stays on its own line, as on the statement. Accounts that share an
+ // NMLS field are added together only in the field totals and the review's net lines.
+ const kept=rows.filter(r=>r.include);
+ return {rows:[...kept.filter(r=>r.code),...kept.filter(r=>!r.code)],controls,notes,skipped};
 }
 export function reconcile(rows,controls={}){
  const selected=rows.filter(r=>r.include);const totals={Assets:0,Liabilities:0,Equity:0},groups={};const issues=[],warnings=[];

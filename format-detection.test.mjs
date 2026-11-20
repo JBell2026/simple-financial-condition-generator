@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {balanceSheetSource,isBalanceSheetTitle,isOtherStatementTitle} from './dist/balance-source.mjs';
 import {parseLines,selectTotalAmountLine} from './dist/engine.mjs';
+// Accounts are no longer merged per NMLS field, so field amounts are summed here.
+const fieldSum=(result,code)=>result.rows.filter(r=>r.code===code).reduce((total,r)=>total+r.cents,0);
 for(const title of ['Balance Sheet: as of September 30, 2026','CONSOLIDATED BALANCE SHEETS (Unaudited)','Balance-Sheet','Statement of Financial Position','B A L A N C E S H E E T'])assert(isBalanceSheetTitle(title),title);
 for(const title of ['Statement of Operations (GAAP basis): March 1 to September 30, 2026','Management P&L and Adjusted EBITDA','Cash Flow Statement'])assert(isOtherStatementTitle(title),title);
 assert(!isBalanceSheetTitle('See Balance Sheet for details'));
 const split=balanceSheetSource(['Balance','Sheet: September 30, 2026','Assets','Cash  1,000','Liabilities','Accounts payable  200',"Members’ equity",'Member contributions  800']);
-const parsed=parseLines(split.lines);assert.equal(parsed.rows.find(r=>r.code==='A010').cents,100000);assert.equal(parsed.rows.find(r=>r.code==='B340').cents,80000);
+const parsed=parseLines(split.lines);assert.equal(fieldSum(parsed,'A010'),100000);assert.equal(fieldSum(parsed,'B340'),80000);
 assert.equal(selectTotalAmountLine({text:'Cash  5,000  10,000',source:'Page 1'}).text.trim(),'Cash   10,000');
 assert.equal(selectTotalAmountLine({text:'Mercury Checking - 5892  $151,200.17',source:'Page 1'}).text,'Mercury Checking - 5892  $151,200.17');
 const structure=balanceSheetSource(['Assets','Cash  1,000','Liabilities','Accounts payable  200','Equity','Retained earnings  800']);assert.equal(structure.matched,1);
@@ -14,7 +16,7 @@ if(process.argv[2]){
  const pages=fs.readFileSync(process.argv[2],'utf8').split('\f').filter(p=>p.trim());
  const lines=pages.flatMap((p,i)=>p.split('\n').map((text,j)=>({text,page:i+1,source:`Page ${i+1}, line ${j+1}`})));
  const source=balanceSheetSource(lines);assert.equal(source.matched,1);assert(source.lines.every(l=>l.page===2));
- const result=parseLines(source.lines.map(selectTotalAmountLine));assert.equal(result.controls.assets,32606300);assert.equal(result.controls.liabilities,752600);assert.equal(result.controls.equity,31853700);assert.equal(result.rows.find(r=>r.code==='A010').cents,14094500);assert.equal(result.rows.find(r=>r.code==='A020').cents,2000000);assert.equal(result.rows.find(r=>r.code==='B280').cents,-16854500);assert(result.rows.length>0);
+ const result=parseLines(source.lines.map(selectTotalAmountLine));assert.equal(result.controls.assets,32606300);assert.equal(result.controls.liabilities,752600);assert.equal(result.controls.equity,31853700);assert.equal(fieldSum(result,'A010'),14094500);assert.equal(fieldSum(result,'A020'),2000000);assert.equal(fieldSum(result,'B280'),-16854500);assert(result.rows.length>0);
  console.log('Uploaded Elio financials: Balance Sheet page 2 recognized; whole dollars, restricted cash, negative deficit and members equity read. Other statements excluded.');
 }
 console.log('Varied titles, split/OCR headings, structural detection, whole dollars, total column and account-number handling passed.');
