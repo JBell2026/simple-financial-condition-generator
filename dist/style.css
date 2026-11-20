@@ -105,3 +105,43 @@ label.include-line input{width:auto;margin:0}
 .reconcile tr.unreconciled th{background:#985448;color:#F7F4EC}
 
 [hidden]{display:none!important}
+
+/* Balance sheet review: compact one-line rows, status first */
+#review .section-head p{margin:4px 0 0}
+#review .totals{margin:14px 0}
+#review .totals .in-balance strong{color:#20354D}
+#review .totals .in-balance::after{content:"In balance";display:block;font-size:12px;font-weight:600;color:#42505A}
+#review .totals .out-of-balance{background:#985448;color:#F7F4EC;border-radius:8px;padding:10px 12px;margin:-10px -12px}
+#review .totals .out-of-balance::after{content:"Out of balance";display:block;font-size:12px;font-weight:600}
+#review table.bs-review{table-layout:fixed;width:100%}
+#review table.bs-review th:nth-child(1){width:64px!important}
+#review table.bs-review th:nth-child(2){width:auto!important}
+#review table.bs-review th:nth-child(3){width:36%!important}
+#review table.bs-review th:nth-child(4){width:150px!important}
+#review table.bs-review th:nth-child(5){width:44px!important}
+#review table.bs-review td{padding:6px 8px!important;vertical-align:middle!important;line-height:1.35}
+#review table.bs-review #rows tr[data-id] input:not([type=checkbox]),#review table.bs-review #rows tr[data-id] select{height:36px;min-height:36px;padding:6px 8px;font-size:14px;margin:0}
+#review table.bs-review [data-key=cents]{text-align:right;font-variant-numeric:tabular-nums}
+#review table.bs-review .move-cell{display:flex;align-items:center;gap:8px;border-left-width:4px;min-width:0;position:static;box-shadow:none;height:48px}
+#review table.bs-review .move-cell input[type=checkbox]{width:16px;height:16px;margin:0}
+#review table.bs-review .drag-handle{all:unset;cursor:grab;font-size:16px;line-height:1;color:#42505A;padding:4px 2px;touch-action:none}
+#review table.bs-review .drag-handle:focus-visible{outline:2px solid #985448;outline-offset:2px}
+#review table.bs-review .row-actions button{all:unset;cursor:pointer;color:#985448;font-size:18px;padding:2px 8px}
+#review table.bs-review .row-detail{margin:2px 0 0}
+#review table.bs-review .row-detail summary{font-size:11px;opacity:.75}
+#review table.bs-review .row-detail[open] summary{opacity:1}
+#review table.bs-review .section-move{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px}
+#review table.bs-review .section-move select{width:auto!important;height:32px!important;min-height:32px!important}
+#review table.bs-review tr.unclassified>td{background:#F6EDE9}
+#review table.bs-review tr.unclassified [data-key=code]{border-color:#985448;box-shadow:0 0 0 1px #985448}
+#review table.bs-review tr.excluded input:not([type=checkbox]),#review table.bs-review tr.excluded select{opacity:.5}
+#review table.bs-review .calculated-row td{padding:8px!important;font-weight:600;border-top:1px solid #B3C2CA}
+#review table.bs-review .calculated-row small{font-weight:400;font-size:11px;opacity:.7}
+#review table.bs-review .calculated-row td[data-calc]{text-align:right;font-size:14px;padding-right:16px!important}
+#review table.bs-review .section-total td{font-weight:700;border-top:2px solid #20354D}
+#review table.bs-review .section-total td[data-calc]{font-size:15px}
+#review table.bs-review .section-divider th{font:700 20px/1.2 Spartan,sans-serif!important;padding:10px 12px!important;border-top:12px solid white!important}
+#review #otherAssetsBox{margin:12px 0}
+#review table.bs-review #rows tr[data-id]>td{vertical-align:top!important;padding-top:8px!important;padding-bottom:6px!important}
+#review table.bs-review .move-cell{height:36px;margin-top:8px}
+#review table.bs-review .row-actions button{line-height:36px}
