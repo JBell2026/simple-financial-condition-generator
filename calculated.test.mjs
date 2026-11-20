@@ -21,6 +21,8 @@ console.log('Calculated FV7 aggregates, separate NMLS rounding, Excel formulas a
 const {orderedReview}=await import('./dist/calculated.mjs');
 assert.deepEqual(orderedReview({A010:10000,A020:20000}).map(r=>r.code),['A010','A039','A237','A020','A033','A239','A240']);
 assert.equal(orderedReview({}).length,0);
+// Other assets are listed before their subtotal, Total Long-Term Assets and Total Assets.
+assert.deepEqual(orderedReview({A010:10000,A180:5000,A230H:2000}).map(r=>r.code),['A010','A039','A237','A180','A230H','A230','A239','A240']);
 assert(orderedReview({A010:0}).some(r=>r.code==='A039'));
 assert(!orderedReview({A010:10000}).some(r=>r.code==='A063'||r.code==='B349'));
 assert.equal(calculatedReview({A010:100,A038:-100}).find(r=>r.code==='A039').hasInformation,true);

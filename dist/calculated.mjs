@@ -17,8 +17,8 @@ export const calculations=[
  ['B350','Total Equity','Equity','B319 B320 B349'],
  ['B360','Total Liabilities and Equity','Equity','B220 B350']
 ].map(([code,label,section,deps])=>({code,label,section,deps:deps.split(' ')}));
-// Main Schedule A/B order, followed by the applicable supporting Other Assets fields.
-export const filingOrder='A010 A034 A036 A038 A039 A060 A062 A063 A230B A230C A190 A050 A040 A237 A020 A030 A032 A033 A064 A066 A067 A160 A080 A070 A090 A100 A110 A170 A180 A210 A220 A200 A230D A230F A230 A239 A240 A250 A260 A262 A264 A266 A230A A230E A230G A230H B009 B010 B070 B080 B090 B100 B120 B217 B020 B030 B040 B050 B060 B110 B130 B140 B150 B160 B170 B180 B190 B200 B210 B219 B220 B250 B260 B270 B280 B290 B300 B310 B240 B319 B320 B330 B340 B349 B350 B360'.split(' ');
+// Schedule A/B order. Other Assets fields sit before their subtotal and before Total Assets.
+export const filingOrder='A010 A034 A036 A038 A039 A060 A062 A063 A230B A230C A190 A050 A040 A237 A020 A030 A032 A033 A064 A066 A067 A160 A080 A070 A090 A100 A110 A170 A180 A210 A220 A200 A230D A230F A230A A230E A230G A230H A230 A239 A240 A250 A260 A262 A264 A266 B009 B010 B070 B080 B090 B100 B120 B217 B020 B030 B040 B050 B060 B110 B130 B140 B150 B160 B170 B180 B190 B200 B210 B219 B220 B250 B260 B270 B280 B290 B300 B310 B240 B319 B320 B330 B340 B349 B350 B360'.split(' ');
 export function filingCompare(a,b){const rank=c=>filingOrder.includes(c)?filingOrder.indexOf(c):999;return rank(a.code)-rank(b.code)||String(a.code||'').localeCompare(String(b.code||''));}
 export function orderedReview(groups){return [...Object.entries(groups).filter(([c])=>fields[c]).map(([code,cents])=>({code,cents,whole:rounded(cents),label:fields[code][0],section:fields[code][1]})),...calculatedReview(groups).filter(r=>r.hasInformation)].sort(filingCompare);}
 export function calculatedReview(groups){
