@@ -34,6 +34,7 @@ export function reportingDate(year,period){
  const ends={MCRQ1:'03-31',MCRQ2:'06-30',MCRQ3:'09-30',MCRQ4:'12-31',MCRANNUAL:'12-31'};
  return /^\d{4}$/.test(String(year))&&Number(year)>=2026&&ends[period]?String(year)+'-'+ends[period]:'';
 }
+export const scheduleOFields=Object.keys(fcSchema.ScheduleOSection);
 export function exportXml(result,meta){
  const match=/^(\d{4})-(\d{2})-(\d{2})$/.exec(meta.date||'');
  if(!match)throw Error('Enter the balance sheet reporting date.');
@@ -57,6 +58,10 @@ export function exportXml(result,meta){
   if(['PositiveDollar','Count'].includes(type)&&n<0)throw Error(code+' cannot be negative.');
   sections[section].push(`      <${tag}>${n}</${tag}>`);
  }
+ // Schedule O (loan loss reserves and related activity) is always reported, with every
+ // field the schema accepts set to zero, so NMLS shows it as completed rather than blank.
+ if(result.groups.D260||result.groups.D270)throw Error('Schedule O is reported with all zeros, but '+(result.groups.D260?'D260':'D270')+' has an amount that NMLS requires to match Schedule O. Remove that amount or complete Schedule O in NMLS.');
+ sections.ScheduleOSection=scheduleOFields.map(tag=>`      <${tag}>0</${tag}>`);
  if(String(meta.otherAssetsExplanation||'').trim()){const text=String(meta.otherAssetsExplanation).trim().replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&apos;'}[c]));sections.ScheduleASection.push('      <A230J_1>'+text+'</A230J_1>');}
  const body=Object.entries(sections).filter(([,rows])=>rows.length).map(([name,rows])=>`    <${name}>\n${rows.join('\n')}\n    </${name}>`).join('\n');
  return `<?xml version="1.0" encoding="utf-8"?>\n<Mcr formVersion="v7" type="E" year="${year}" periodType="${period}">\n  <Fc>\n${body}\n  </Fc>\n</Mcr>\n`;
@@ -73,28 +78,73 @@ export function suggest(label,section){
  const s=label.toLowerCase();let code='';
  if(section==='Assets'){
   if(/loans? held for sale|\bhfs\b/.test(s))code=/fair value|\bfv\b/.test(s)?'A062':'A060';
-  else if(/checking|saving|bank account|cash/.test(s))code=/restricted/.test(s)&&!/unrestricted/.test(s)?'A020':'A010';
-  else if(/equipment|depreciation|furniture|leasehold/.test(s))code='A180';
+  else if(/checking|saving|bank account|cash|money market|undeposited funds|operating account|payroll account|trust account|escrow account/.test(s))code=/restricted/.test(s)&&!/unrestricted/.test(s)?'A020':'A010';
+  else if(/(?:loans?|notes?|advances?)\s+(?:to|receivable\W+(?:from\s+)?)\s*(?:officer|shareholder|stockholder|member|owner|partner|related|affiliate|employee)|(?:officer|shareholder|stockholder|member|owner|partner|employee)s?['’]?s?\s+(?:loans?|advances?|receivables?)/.test(s))code='A190';
+  else if(/equipment|depreciation|furniture|leasehold|vehicle|automobile|computer|building|\bland\b|improvements?/.test(s))code='A180';
   else if(/goodwill|intangible/.test(s))code='A210';
   else if(/due from.*(?:member|owner|officer|related|shareholder)/.test(s))code='A190';
   else if(/receivable/.test(s))code=/shareholder|owner|officer|related/.test(s)?'A190':/accounts|trade/.test(s)?'A230C':'A050';
-  else if(/prepaid|deposit|^other assets$/.test(s))code='A230H';
+  else if(/prepaid|deposit|other (?:non.?current |long.term )?assets?$|organization(?:al)? costs?|start.?up costs?|accumulated amorti[sz]ation/.test(s))code='A230H';
  } else if(section==='Liabilities'){
   if(/shareholder|owner|officer|related/.test(s)||(/due\s+(?:to|from)(?:\s*\/\s*(?:to|from))?/.test(s)&&/holdings?|parent|affiliate|subsidiar|member|partner/.test(s)))code=/long.term/.test(s)?'B130':'B080';
   else if(/warehouse/.test(s))code='B009';
   else if(/line of credit|credit facility/.test(s))code='B010';
   else if(/income tax/.test(s))code='B190';
-  else if(/accrued|payroll|tax(?:es)? payable|commissions? payable|compensation payable|bonuses? payable/.test(s))code='B100';
-  else if(/credit card|accounts payable|unearned|deferred revenue|unidentified receipts|^other current liabilities$/.test(s))code='B120';
+  else if(/accrued|payroll|tax(?:es)? payable|sales tax|withholding|garnish|401\s?\(?k|commissions? payable|compensation payable|bonuses? payable|wages payable|salaries payable/.test(s))code='B100';
+  else if(/credit card|accounts payable|unearned|deferred revenue|customer deposits?|unidentified receipts|^other current liabilities$/.test(s))code='B120';
+  else if(/lease liabilit|deferred rent/.test(s))code=/current/.test(s)&&!/non.?current/.test(s)?'B120':'B140';
   else if(/loan|note|mortgage/.test(s))code=/long.term/.test(s)?'B140':'B090';
  } else if(section==='Equity'){
-  if(/common stock/.test(s))code='B260';else if(/preferred stock/.test(s))code='B250';
+  if(/common stock|capital stock/.test(s))code='B260';else if(/preferred stock/.test(s))code='B250';
   else if(/paid.in|owner.*investment|capital contribution/.test(s))code='B270';
   else if(/net income|net profit|current.*earning|other comprehensive|\boci\b/.test(s))code='B300';
-  else if(/retained|accumulated deficit/.test(s))code='B280';
+  else if(/retained|accumulated deficit|dividends? paid|(?:shareholder|stockholder)s?['’]?s?\s+distributions?/.test(s))code='B280';
   else if(/treasury/.test(s))code='B290';else if(/member/.test(s))code='B340';
  }
  return code;
+}
+// When an account name alone is not recognizable, the group heading it sits under
+// (for example "Credit Cards" or "Bank Accounts") supplies a reviewable suggestion.
+export function suggestFromHeading(heading,section){
+ const s=String(heading||'').toLowerCase();if(!s)return '';
+ if(section==='Assets'){
+  if(/bank|checking|savings|cash/.test(s))return 'A010';
+  if(/fixed assets|property|equipment/.test(s))return 'A180';
+  if(/accounts receivable/.test(s))return 'A230C';
+  if(/other (?:current |non.?current |long.term )?assets|prepaid/.test(s))return 'A230H';
+ }else if(section==='Liabilities'){
+  if(/long.term|non.?current/.test(s))return 'B140';
+  if(/credit cards?|accounts payable|current liabilities/.test(s))return 'B120';
+ }
+ return '';
+}
+const accountNumber=/^(?:\d{4,8}(?:[.-]\d+)?\s*[-–—:·]?\s+|\d{1,3}(?:[.-]\d+)?\s*[-–—:·]\s+)/;
+// Statements with more than one amount column (comparative periods, monthly columns).
+// Returns the column count, any header labels, and the default column to import.
+export function amountColumns(lines){
+ const texts=lines.map(l=>typeof l==='string'?l:l.text||'');const counts={};
+ for(const t of texts){const n=moneyMatches(t).length,label=n?t.slice(0,moneyMatches(t)[0].index).trim():'';if(n>1&&label&&!/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b/i.test(t))counts[n]=(counts[n]||0)+1;}
+ const best=Object.entries(counts).filter(([,lines])=>lines>1).sort((a,b)=>b[1]-a[1])[0];if(!best)return {count:1,labels:[],index:-1};
+ const count=Number(best[0]);let labels=[],index=-1;
+ if(!texts.slice(0,40).some(t=>/(?:^|\s{2})(?:grand\s+)?total\s*$/i.test(t)))for(const t of texts.slice(0,40)){
+  const parts=t.trim().split(/\s{2,}|\t/).map(p=>p.trim()).filter(Boolean),dates=parts.map(p=>/\d{4}|\d{1,2}\/\d{1,2}\/\d{2}/.test(p)?Date.parse(p.replace(/^(?:as of|as at|at)\s+/i,'')):NaN);
+  if(parts.length===count&&dates.every(Number.isFinite)){labels=parts;index=dates.indexOf(Math.max(...dates));break;}
+ }
+ return {count,labels,index};
+}
+export function selectAmountColumn(line,index){
+ if(index===undefined||index===null||index<0)return selectTotalAmountLine(line);
+ const ms=moneyMatches(line.text);if(ms.length<2)return line;
+ const pick=ms[Math.min(index,ms.length-1)];
+ return {...line,text:line.text.slice(0,ms[0].index)+' '+pick[0],source:line.source+' / amount column '+(Math.min(index,ms.length-1)+1)};
+}
+// Default column choice is made page by page: a page with dated column headers uses
+// its latest period; otherwise the rightmost (Total) column. A chosen index overrides.
+export function selectAmountsByPage(lines,override){
+ if(Number.isInteger(override)&&override>=0)return lines.map(l=>selectAmountColumn(l,override));
+ const pages=new Map();for(const l of lines){const p=l.page??'text';if(!pages.has(p))pages.set(p,[]);pages.get(p).push(l);}
+ const index=new Map([...pages].map(([p,items])=>[p,amountColumns(items).index]));
+ return lines.map(l=>selectAmountColumn(l,index.get(l.page??'text')));
 }
 function currentAssetBreakdown(supplements, expected){
  const candidates=[];
@@ -119,7 +169,7 @@ function currentAssetBreakdown(supplements, expected){
  return candidates.length===1?candidates[0]:null;
 }
 export function parseLines(lines,{supplements=[]}={}){
- let section='',active=true,cashCode='',otherAssets=false;const rows=[],controls={},notes=[];let skipped=0;
+ let section='',active=true,cashCode='',otherAssets=false,group='';const rows=[],controls={},notes=[];let skipped=0;
  for(let i=0;i<lines.length;i++){
   let {text,source}=typeof lines[i]==='string'?{text:lines[i],source:'Line '+(i+1)}:lines[i];
   text=text.trim(); if(!text)continue;
@@ -130,13 +180,13 @@ export function parseLines(lines,{supplements=[]}={}){
   const matches=moneyMatches(text);
   if(!matches.length){
    cashCode=section==='Assets'&&/^(?:restricted |unrestricted )?cash\s*(?:and|&)\s*(?:cash\s+)?equivalents(?:,?\s*(?:unrestricted|restricted))?$/i.test(text)?(/restricted/i.test(text)&&!/unrestricted/i.test(text)?'A020':'A010'):'';
-   otherAssets=section==='Assets'&&/^other assets$/i.test(heading);
+   otherAssets=section==='Assets'&&/^other assets$/i.test(heading);group=heading;
    if(/^(total\s+)?assets$/i.test(heading))section='Assets';
    else if(/^(current |long.term |other current )?liabilities(?: (?:and|&) equity)?$/i.test(heading))section='Liabilities';
    else if(/^(?:(?:members?|owners?|stockholders?|shareholders?)[’'s\s]*)?equity$/i.test(heading))section='Equity';
    continue;
   }
-  const first=matches[0],label=text.slice(0,first.index).trim().replace(/\s+/g,' ');
+  const first=matches[0],label=text.slice(0,first.index).trim().replace(/\s+/g,' ').replace(accountNumber,'').replace(/^[·•\-–—]\s*/,'');
   if(!label||!section)continue;
   if(matches.length>1){notes.push(source+': multiple amounts. Choose the amount column before importing.');continue;}
   const cents=amount(first[0]);if(cents===null)continue;
@@ -157,14 +207,19 @@ export function parseLines(lines,{supplements=[]}={}){
    }
   }
   const contraOtherAsset=otherAssets&&/^accumulated amorti[sz]ation$/i.test(label);
-  const code=fixedTotal?'A180':total?'':contraOtherAsset?'A230H':cashCode||suggest(label,section);
+  let code=fixedTotal?'A180':total?'':contraOtherAsset?'A230H':cashCode||suggest(label,section),basis=code?'account name':'';
+  if(!total&&!code){code=suggestFromHeading(group,section);if(code)basis='group heading “'+group+'”';}
+  if(!total&&/long.term|non.?current/i.test(group)&&(code==='B090'||code==='B080')){code=code==='B090'?'B140':'B130';basis='group heading “'+group+'”';}
+  if(total)group='';
   const needsReview=section==='Assets'&&/^other current assets$/i.test(label);
   const breakdown=needsReview?currentAssetBreakdown(supplements,cents):null;
   if(breakdown){
    for(const row of breakdown)rows.push({...row,id:rows.length+1});
    continue;
   }
-  rows.push({id:rows.length+1,label,cents,section,code,include:needsReview||!!code&&(!total||fixedTotal),source:label+' $'+(cents/100).toFixed(2)+' ('+source+')',total:false,fixedTotal});
+  // Every detail account is kept. An account without a recognized NMLS field stays in
+  // the review as unclassified instead of being dropped, so the statement still foots.
+  rows.push({id:rows.length+1,label,cents,section,code,basis,include:fixedTotal||!total,source:label+' $'+(cents/100).toFixed(2)+' ('+source+')'+(basis.startsWith('group')?' — suggested from '+basis:''),total:false,fixedTotal});
  }
  const grouped=new Map();
  for(const row of rows.filter(r=>r.include&&r.code)){
@@ -175,7 +230,10 @@ export function parseLines(lines,{supplements=[]}={}){
  return {rows:[...grouped.values(),...rows.filter(r=>r.include&&!r.code)],controls,notes,skipped};
 }
 export function reconcile(rows,controls={}){
- const selected=rows.filter(r=>r.include);const totals={Assets:0,Liabilities:0,Equity:0},groups={};const issues=[];
+ const selected=rows.filter(r=>r.include);const totals={Assets:0,Liabilities:0,Equity:0},groups={};const issues=[],warnings=[];
+ // A whole-dollar statement whose own totals are a few dollars off the sum of its lines
+ // is source rounding: reported as a warning, not as a blocking difference.
+ const wholeDollars=selected.length>0&&selected.every(r=>Number.isSafeInteger(r.cents)&&r.cents%100===0),sourceDiff=(text,delta)=>{if(wholeDollars&&Math.abs(delta)<=300)warnings.push(text+' by '+(delta/100).toFixed(2)+' — rounding in a whole-dollar statement; the detail lines are used.');else issues.push(text+' by '+(delta/100).toFixed(2));};
  for(const r of selected){
   if(!Number.isSafeInteger(r.cents)){issues.push('Invalid amount: '+r.label);continue;}
   if(!(r.section in totals)){issues.push('Select a section: '+r.label);continue;}
@@ -186,16 +244,16 @@ export function reconcile(rows,controls={}){
  if(controls.currentLiabilities!==undefined){
   const currentCodes=['B009','B010','B080','B090','B100','B120'];
   const actual=currentCodes.reduce((sum,code)=>sum+(groups[code]||0),0);
-  if(actual!==controls.currentLiabilities)issues.push('Source current liabilities subtotal differs by '+((actual-controls.currentLiabilities)/100).toFixed(2));
+  if(actual!==controls.currentLiabilities)sourceDiff('Source current liabilities subtotal differs',actual-controls.currentLiabilities);
  }
- for(const c of ['A010','A020'])if(controls[c]!==undefined&&(groups[c]||0)!==controls[c])issues.push('Source '+c+' cash subtotal differs by '+(((groups[c]||0)-controls[c])/100).toFixed(2));
+ for(const c of ['A010','A020'])if(controls[c]!==undefined&&(groups[c]||0)!==controls[c])sourceDiff('Source '+c+' cash subtotal differs',(groups[c]||0)-controls[c]);
  const difference=totals.Assets-totals.Liabilities-totals.Equity;
  if(difference!==0)issues.push('Balance sheet difference: '+(difference/100).toFixed(2));
  for(const [key,actual] of Object.entries({assets:totals.Assets,liabilities:totals.Liabilities,equity:totals.Equity,combined:totals.Liabilities+totals.Equity})){
-  if(controls[key]!==undefined&&controls[key]!==actual)issues.push('Source '+key+' total differs by '+((actual-controls[key])/100).toFixed(2));
+  if(controls[key]!==undefined&&controls[key]!==actual)sourceDiff('Source '+key+' total differs',actual-controls[key]);
  }
  const whole={Assets:0,Liabilities:0,Equity:0};
  for(const [code,cents]of Object.entries(groups))whole[fields[code][1]]+=rounded(cents);
  const roundingDifference=whole.Assets-whole.Liabilities-whole.Equity;
- return {totals,groups,whole,difference,roundingDifference,issues,count:selected.length};
+ return {totals,groups,whole,difference,roundingDifference,issues,warnings,count:selected.length};
 }

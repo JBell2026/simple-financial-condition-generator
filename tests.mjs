@@ -16,7 +16,8 @@ console.log('Parser, P&L exclusion, source controls, negative values, rounding a
 const mapped=parseLines(['Assets','Equipment $200.00','Accumulated Depreciation $-50.00','Total Fixed Assets $150.00','Checking $10.00','Savings $20.00','Unmapped account $40.00']);
 assert.equal(mapped.rows.find(r=>r.code==='A180').cents,15000);
 assert.equal(mapped.rows.find(r=>r.code==='A010').cents,3000);
-assert.equal(mapped.rows.length,2);
+// An unrecognized account stays in the review, unclassified, instead of being dropped.
+assert.equal(mapped.rows.length,3);const unmapped=mapped.rows.find(r=>r.label==='Unmapped account');assert.equal(unmapped.code,'');assert.equal(unmapped.include,true);assert.equal(unmapped.cents,4000);assert(reconcile(mapped.rows).issues.some(s=>s.includes('Review the NMLS classification: Unmapped account')));
 assert.equal(mapped.rows.find(r=>r.code==='A180').label,'Total Fixed Assets');
 const equity=parseLines(['Equity','Retained Earnings $100.00','Net Income $26,995.82','Net Profit $4.18']);
 assert.equal(equity.rows.find(r=>r.code==='B280').cents,10000);

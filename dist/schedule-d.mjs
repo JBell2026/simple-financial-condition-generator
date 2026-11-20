@@ -19,6 +19,7 @@ export function suggestD(label,category){
  if(/extraordinary/.test(s))return 'D540';
  if(/loan officer|\bmlo\b|sales commission/.test(s))return 'D010';
  if(/underwrit|closer|processor salar|processing staff/.test(s))return 'D020';
+ if(/salar|wages/.test(s)&&/payroll tax/.test(s))return ''; // Combined pay and payroll tax: split or choose in review.
  if(/payroll tax|fica|futa|suta|unemployment/.test(s))return 'D150';
  if(/subservicing/.test(s))return 'D240';
  if(/warehouse.*interest|interest.*warehouse/.test(s))return 'C100';
@@ -32,15 +33,22 @@ export function splitExpense(rows,id,part,field){
  original.cents-=part;rows.splice(rows.indexOf(original)+1,0,next);return next;
 }
 export function extractPLFigures(lines){
- const result={};let revenue,otherIncome,inOtherIncome=false,revenueExpenseStatement=false;
+ const result={};let revenue,otherIncome,otherIncomeTotal,inOtherIncome=false,revenueExpenseStatement=false,inRevenue=false,revenueSum=0,revenueCount=0,finished=false;
  for(const line of lines){
   const raw=(typeof line==='string'?line:line.text).trim();
   if(/^statement of revenues? (?:and|&) expenses?$/i.test(raw))revenueExpenseStatement=true;
   if(/^other income$/i.test(raw)){inOtherIncome=true;continue;}
+  // A revenue section with no total line: its detail lines are summed for gross income.
+  if(!moneyMatches(raw).length&&raw){inRevenue=!finished&&/^(?:(?:operating|trading)\s+)?(?:revenues?|income|sales)$/i.test(raw.replace(/[:\s]+$/,''));}
   const text=selectTotalAmountLine(typeof line==='string'?{text:line,source:''}:line).text;
   const ms=moneyMatches(text);if(!ms.length)continue;
   const label=text.slice(0,ms[0].index).trim(),value=amount(ms[0][0]);if(value===null)continue;
-  if(/^total\s+(?:revenues?|income)$|^gross income$/i.test(label)&&result.gross===undefined)result.gross=value;
+  if(inRevenue){if(/^(?:total|gross|net)\b/i.test(label))inRevenue=false;else if(label){revenueSum+=value;revenueCount++;}}
+  if(/^net\s+(?:income|profit|loss|earnings)(?:\s*\(loss\))?$/i.test(label))finished=true;
+  if(/^total\s+(?:(?:trading|operating|ordinary|gross)\s+)?(?:revenues?|income|sales)$|^gross income$/i.test(label)&&result.gross===undefined)result.gross=value;
+  // Other income reported below operating income is part of total gross income (C800).
+  if(/^total\s+other\s+income$/i.test(label)&&otherIncomeTotal===undefined)otherIncomeTotal=value;
+  if(/^(?:bank\s+)?interest\s+(?:income|earned)$/i.test(label)&&result.interest===undefined)result.interest=value;
   if(/^net\s+(?:income(?:\s*\(loss\))?|profit|loss)$/i.test(label)&&result.reportedNet===undefined)result.reportedNet=/^net loss$/i.test(label)&&value>0?-value:value;
   if(!revenueExpenseStatement)continue;
   if(/^net revenues?$/i.test(label)&&revenue===undefined)revenue=value;
@@ -49,6 +57,7 @@ export function extractPLFigures(lines){
   if(/^total$/i.test(label))inOtherIncome=false;
  }
  if(revenue!==undefined&&result.gross===undefined)result.gross=revenue+(otherIncome??0);
+ else{if(result.gross===undefined&&revenueCount)result.gross=revenueSum;if(result.gross!==undefined&&otherIncomeTotal!==undefined)result.gross+=otherIncomeTotal;}
  return result;
 }
 export function buildScheduleD(rows,options={}){
@@ -80,7 +89,7 @@ export function buildScheduleD(rows,options={}){
 }
 export function addScheduleWorkbook(wb,rows,report,meta){
  const data=wb.addWorksheet('Schedule D Lines');data.columns=[{width:16},{width:46},{width:20},{width:65},{width:12}];data.addRow(['NMLS field','Description','Amount','Source','Include']);for(const r of rows)data.addRow([r.field,r.label,r.cents/100,r.source,r.include===false?'No':'Yes']);data.getColumn(3).numFmt='#,##0.00;(#,##0.00)';data.views=[{state:'frozen',ySplit:1}];data.getRow(1).font={bold:true};
- const setup=wb.addWorksheet('Schedule D Setup');setup.addRows([['Version','Simple Schedule D v1'],['Company',meta.company],['NMLS ID',meta.nmls],['As of',meta.date],['Gross income',Number.isSafeInteger(report.options.gross)?report.gross/100:''],['Other interest income',report.interest/100],['P&L final net income',Number.isSafeInteger(report.options.reportedNet)?report.reportedNet/100:''],['Non-interest income field',report.options.incomeField||'C210'],['Gross expense control total',Number.isSafeInteger(report.options.sourceExpenses)?report.options.sourceExpenses/100:''],['Instructions','Edit Schedule D Lines and Setup for Schedule D. SFC worksheet is a category reference; changes there do not replace field allocations. Nonzero B36/B43 gross override still applies.']]);setup.columns=[{width:32},{width:110}];
+ const setup=wb.addWorksheet('Schedule D Setup');setup.addRows([['Version','Simple Schedule D v1'],['Company',meta.company],['NMLS ID',meta.nmls],['As of',meta.date],['Gross income',Number.isSafeInteger(report.options.gross)?report.gross/100:''],['Other interest income',report.interest/100],['P&L final net income',Number.isSafeInteger(report.options.reportedNet)?report.reportedNet/100:''],['Non-interest income field',report.options.incomeField||'C210'],['Gross expense control total',Number.isSafeInteger(report.options.sourceExpenses)?report.options.sourceExpenses/100:''],['Instructions','Edit Schedule D Lines and Setup for Schedule D. SFC worksheet is a category reference; changes there do not replace field allocations. A numeric B36/B43 gross override, including an explicit zero, still applies; leave it blank to use the Setup or L26/L33 gross income.']]);setup.columns=[{width:32},{width:110}];
  const review=wb.addWorksheet('Schedule D Review');review.columns=[{width:15},{width:48},{width:20},{width:22},{width:65}];review.addRow(['Field','Description','Original dollars','NMLS whole dollars','Calculation']);
  review.addRow(['C800','Total gross income',{formula:"'Schedule D Setup'!B5",result:report.gross/100},{formula:'ROUND(C2,0)',result:rounded(report.gross)},'Schedule D Setup']);
  const entries=dReviewRows(report),lookup={C800:2};entries.forEach((r,i)=>lookup[r.code]=i+3);
@@ -96,7 +105,7 @@ export function readScheduleWorkbook(book){
  const rows=[];for(let i=2;i<=1000;i++){const field=String(sheet['A'+i]?.v||'').trim().toUpperCase(),label=String(sheet['B'+i]?.v||'').trim(),cell=sheet['C'+i];if(!field&&!label&&(cell?.v===undefined||cell.v===''))continue;if(cell?.t==='e')throw Error('Excel error in Schedule D Lines row '+i);const include=String(sheet['E'+i]?.v??'Yes').trim();if(!/^(yes|no)$/i.test(include))throw Error('Use Yes or No in Schedule D Lines Include column, row '+i);rows.push({field,label:label||field,cents:amount(cell?.v),source:sheet['D'+i]?.v||'Excel row '+i,include:!/^no|false|0$/i.test(include)});}
  if(Object.entries(sheet).some(([key,cell])=>/^[A-E](\d+)$/.test(key)&&Number(key.match(/\d+/)[0])>1000&&cell?.v!==undefined&&cell.v!==''))throw Error('Schedule D Lines exceeds 999 worksheet rows.');
  let gross=val(setup.B5),reportedNet=val(setup.B7),grossSource='Schedule D Setup!B5';
- for(const [name,s]of Object.entries(book.Sheets)){const map=Object.entries(s).find(([key,c])=>/^A\d+$/.test(key)&&String(c.v).trim().toUpperCase()==='D050');if(map){const shift=Number(map[0].slice(1))-22,address='B'+(36+shift),override=val(s[address],false,false);if(override!==null&&override!==0){gross=override;grossSource=name+'!'+address;}else if(gross===null){gross=val(s['L'+(26+shift)]);grossSource=name+'!L'+(26+shift);}if(reportedNet===null)reportedNet=val(s['L'+(28+shift)]);break;}}
+ for(const [name,s]of Object.entries(book.Sheets)){const map=Object.entries(s).find(([key,c])=>/^A\d+$/.test(key)&&String(c.v).trim().toUpperCase()==='D050');if(map){const shift=Number(map[0].slice(1))-22,address='B'+(36+shift),override=val(s[address],false,false);if(override!==null){gross=override;grossSource=name+'!'+address;}else if(gross===null){gross=val(s['L'+(26+shift)]);grossSource=name+'!L'+(26+shift);}if(reportedNet===null)reportedNet=val(s['L'+(28+shift)]);break;}}
  return buildScheduleD(rows,{gross,interest:val(setup.B6)||0,reportedNet,incomeField:String(setup.B8?.v||'C210'),sourceExpenses:val(setup.B9),grossSource,meta:{company:setup.B2?.v,nmls:setup.B3?.v,date:setup.B4?.v}});
 }
 

@@ -94,3 +94,12 @@ label{font-size:14px}input,select,textarea{font-size:15px;padding:12px}button{fo
 .income-classification,.schedule-inputs{align-items:stretch}.income-classification>label,.schedule-inputs>label{display:flex;flex-direction:column;justify-content:flex-end;min-width:0}.income-classification>label>input,.income-classification>label>select,.schedule-inputs>label>input{height:48px;min-height:48px;max-height:48px;margin:8px 0 0;box-sizing:border-box}.schedule-inputs{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:20px}#expenseRows td,#scheduleAllocationRows td{vertical-align:top}#expenseRows input:not([type=checkbox]),#expenseRows select,#scheduleAllocationRows select{height:44px;min-height:44px;margin:0}#expenseRows td button,#scheduleAllocationRows td button{min-height:44px;margin-top:0}#expenseRows .row-detail{margin-top:0;padding-top:10px}@media(max-width:500px){.schedule-inputs{grid-template-columns:1fr}}
 
 .expense-confidence{display:inline-block;border-radius:999px;padding:5px 9px;font-size:12px;font-weight:650;white-space:normal}.expense-confidence.high{background:#e2eee7;color:#203f31}.expense-confidence.medium{background:#f7ecd4;color:#735019}.expense-confidence.low{background:#f4dfda;color:#843f35}.expense-confidence.reviewed{background:#e4ebef;color:#20354d}#expenseRows td:nth-child(5){font-size:12px;min-width:0;width:12%}#expenseRows td:nth-child(6){min-width:0;width:9%;font-size:12px}#expenseRows td:nth-child(7){width:4%}
+
+/* General import: cost-of-revenue control and P&L reconciliation panel */
+label.include-line{display:flex;flex-direction:row;align-items:center;gap:8px;margin:12px 0 4px;font-weight:600}
+label.include-line input{width:auto;margin:0}
+.reconcile{margin:14px 0;max-width:640px}
+.reconcile table{width:100%}
+.reconcile td:last-child,.reconcile th:last-child{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.reconcile tr.reconciled th{background:#B3C2CA;color:#20354D}
+.reconcile tr.unreconciled th{background:#985448;color:#F7F4EC}

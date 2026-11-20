@@ -1,7 +1,7 @@
 import {readScheduleWorkbook,dReviewRows} from './schedule-d.mjs';
 import {calculatedReview,orderedReview} from './calculated.mjs';
 import {guide,sourceLink,definitionIssues,definitionWarnings} from './fv7.mjs';
-import {amount,rounded,fields,reconcile,exportXml} from './engine.mjs';
+import {amount,rounded,fields,reconcile,exportXml,scheduleOFields} from './engine.mjs';
 import {fcSchema} from './fc-schema.mjs';
 const columnCodes=['D050',null,'D150','D160','D200','D210','D220','D230','D280','C150'];
 export function readSfc(book,options={}){
@@ -22,7 +22,7 @@ export function readSfc(book,options={}){
  }
  if(entries>75)issues.push('The worksheet contains more than 75 nonzero expense entries.');
  const overrideAddress='B'+(36+shift),grossAddress='L'+(26+shift),interestAddress='L'+(27+shift),netAddress='L'+(28+shift);
- const override=value(overrideAddress);const gross=override!==null&&override!==0?override:value(grossAddress,true);
+ const override=value(overrideAddress);const gross=override!==null?override:value(grossAddress,true);
  const interest=value(interestAddress)||0,net=value(netAddress,true),expenses=categoryTotals.reduce((a,b)=>a+b,0);
  const incomeField=options.incomeField||'C210';if(!['C210','C220','C230','C240','C770'].includes(incomeField))throw Error('Select a supported income field.');
  groups[incomeField]=gross-interest;groups.C060=interest;
@@ -37,7 +37,7 @@ export function readSfc(book,options={}){
  if(roundingNetDifference)issues.push('SFC whole-dollar income / expense / net income difference is $'+roundingNetDifference+'.');
  if(roundingGrossDifference)issues.push('SFC gross income fields have a whole-dollar rounding difference of $'+roundingGrossDifference+'.');
  const metadata=book.Sheets['Client and Sources'];const meta={company:metadata?.B1?.v,nmls:metadata?.B2?.v,date:metadata?.B3?.v};
- return {groups,issues,meta,gross,expenses,net,name,payrollTotal:categoryTotals[1],grossSource:name+'!'+(override!==null&&override!==0?overrideAddress:grossAddress),entryCount:entries};
+ return {groups,issues,meta,gross,expenses,net,name,payrollTotal:categoryTotals[1],grossSource:name+'!'+(override!==null?overrideAddress:grossAddress),entryCount:entries};
 }
 export function readBalance(book){
  for(const [name,s]of Object.entries(book.Sheets)){
@@ -82,6 +82,7 @@ export function mountCombined(getMeta,getBalance,getSchedule){
    $('combinedPreview').innerHTML='<p>'+esc(definitionWarnings(balance.groups).join(' '))+'</p><p>Gross income source: '+esc(sfc.grossSource)+'</p>'+headers+Object.entries(reviewed.result.groups).filter(([c])=>!fields[c]).sort().map(([c,v])=>'<tr><td>'+c+'<br><small>'+esc(guide(c))+' <a href="'+sourceLink(c)+'" target="_blank" rel="noopener">FV7</a></small></td><td>$'+(v/100).toFixed(2)+'</td><td>'+rounded(v)+'</td></tr>').join('')+'</tbody></table>';
    $('combinedPreview').innerHTML+='<h3>Balance sheet in NMLS filing order</h3>'+headers+['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="3">'+section+'</th></tr>'+orderedReview(balance.groups).filter(r=>r.section===section).map(r=>'<tr class="calculated-row"><td>'+r.code+' — '+esc(r.label)+'<br><small>'+esc(r.formula||'Input')+'</small></td><td>$'+(r.cents/100).toFixed(2)+'</td><td>'+r.whole+'</td></tr>').join('')).join('')+'</tbody></table><p class="small">Calculated checks are review only; unassigned inputs count as zero.</p>';
    if(sfc.calculated)$('combinedPreview').innerHTML+='<h3>Schedules C & D filing review</h3>'+headers+dReviewRows(sfc).map(r=>'<tr class="'+(r.deps?'calculated-row':'')+'"><td>'+r.code+' — '+esc(r.label)+'</td><td>$'+(r.cents/100).toFixed(2)+'</td><td>'+r.whole+'</td></tr>').join('')+'</tbody></table>';
+   $('combinedPreview').innerHTML+='<h3>Schedule O</h3><p>All '+scheduleOFields.length+' Schedule O fields ('+scheduleOFields[0].replace('_1','')+' through '+scheduleOFields.at(-1).replace('_1','')+') are included in the XML as 0.</p>';
    if(sfc.warnings?.length)$('combinedPreview').innerHTML+='<p>'+esc(sfc.warnings.join(' '))+'</p>';
    $('combinedStatus').textContent=reviewed.issues.length?reviewed.issues.join(' '):'Combined balance sheet and income statement checks passed. Confirm your review to download.';
   }catch(e){reviewed=null;$('combinedStatus').textContent=e.message;}finally{$('reviewCombined').disabled=false;}

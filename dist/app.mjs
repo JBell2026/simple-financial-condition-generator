@@ -3,7 +3,7 @@ import {balanceSheetSource,isBalanceSheetName} from './balance-source.mjs';
 import {guide,sourceLink,definitionWarnings,definitionIssues} from './fv7.mjs';
 import {mountCombined} from './combined.mjs';
 import {mountAllocator} from './expenses.mjs';
-import {fields,amount,rounded,parseLines,reconcile,reportingDate,needsOcr,selectTotalAmountLine} from './engine.mjs';
+import {fields,amount,rounded,parseLines,reconcile,reportingDate,needsOcr,amountColumns,selectAmountsByPage} from './engine.mjs';
 import * as pdfjs from './vendor/pdf.mjs';
 pdfjs.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs',import.meta.url).href;
 const $=id=>document.getElementById(id),money=v=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v/100),escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -45,7 +45,7 @@ function checks(){
  for(const row of calculated)document.querySelectorAll('[data-calc="'+row.code+'"]').forEach(el=>{el.closest('tr').hidden=!row.hasInformation;el.innerHTML=money(row.cents)+'<br><small>NMLS: '+money(row.whole*100)+'</small>';});
  $('assetTotal').textContent=money(r.totals.Assets);$('liabilityTotal').textContent=money(r.totals.Liabilities);$('equityTotal').textContent=money(r.totals.Equity);$('difference').textContent=money(r.difference);
  const messages=[...r.issues,...definitionIssues(r.groups,{otherAssetsExplanation:$('otherAssetsExplanation').value})];if(r.roundingDifference)messages.push('Whole-dollar rounding difference: '+money(r.roundingDifference*100)+'. Review the grouped NMLS field amounts below.');
- $('checks').innerHTML=r.count?`<div class="notice ${messages.length?'':'success'}"><strong>${messages.length?'Review needed':'Balance checks passed'}</strong>${messages.length?'<ul>'+messages.map(s=>'<li>'+escape(s)+'</li>').join('')+'</ul>':'<p>Original amounts and rounded NMLS field totals balance.</p>'}</div>`:'';
+ $('checks').innerHTML=r.count?`<div class="notice ${messages.length?'':'success'}"><strong>${messages.length?'Review needed':'Balance checks passed'}</strong>${messages.length?'<ul>'+messages.map(s=>'<li>'+escape(s)+'</li>').join('')+'</ul>':'<p>Original amounts and rounded NMLS field totals balance.</p>'}${r.warnings.length?'<p class="small">Note: '+r.warnings.map(escape).join(' ')+'</p>':''}</div>`:'';
  $('definitionWarnings').textContent=definitionWarnings(r.groups).join(' ');
  $('mapping').innerHTML='<table><thead><tr><th>NMLS field</th><th>Description</th><th>Original</th><th>NMLS whole dollars</th></tr></thead><tbody>'+['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="4">'+section+' <span>Schedule '+(section==='Assets'?'A':'B')+'</span></th></tr>'+orderedReview(r.groups).filter(row=>row.section===section).map(row=>`<tr class="${row.deps?'calculated-row':''}"><td>${row.code}</td><td>${escape(row.label)}${row.deps?' <small>Calculated</small><br><small>'+escape(row.formula)+'</small>':''}</td><td>${money(row.cents)}</td><td>${money(row.whole*100)}</td></tr>`).join('')).join('')+'</tbody></table>';
  return r;
@@ -73,7 +73,14 @@ function loadLines(lines,sheetName=''){
  $('importNotes').hidden=!importNotes.length;$('importNotes').textContent=importNotes.join(' ');resetReview();table();
 }
 $('parse').onclick=()=>{rawLines=$('raw').value.split('\n').map((text,i)=>({text,source:'Edited line '+(i+1)}));loadLines(rawLines);};
-function selectAmounts(lines){return lines.map(selectTotalAmountLine);}
+function selectAmounts(lines){const v=$('amountColumn').value;return selectAmountsByPage(lines,v==='auto'?undefined:Number(v));}
+// Offer a column choice when the balance sheet shows more than one amount per account.
+function showAmountColumns(lines){
+ const source=balanceSheetSource(lines).lines,info=amountColumns(source.length?source:lines);
+ $('amountColumn').innerHTML='<option value="auto">Automatic — '+(info.count>1?(info.index>=0?'latest period ('+escape(info.labels[info.index])+')':'Total / rightmost column'):'single amount column')+'</option>'+(info.count>1?Array.from({length:info.count},(_,i)=>'<option value="'+i+'">Column '+(i+1)+(info.labels[i]?' — '+escape(info.labels[i]):'')+'</option>').join(''):'');
+ $('amountColumn').disabled=info.count<2;
+}
+$('amountColumn').onchange=()=>{try{if(workbook)loadLines(selectAmounts(rawLines),$('sheet').value);else if(rawLines.length)importPdfLines();}catch(e){status(e.message);}};
 
 function importPdfLines(){const selected=selectAmounts(rawLines);$('raw').value=selected.map(l=>l.text).join('\n');loadLines(selected);}
 async function pdfLines(file,progress=status,options={}){
@@ -125,10 +132,10 @@ function excelLines(){
  for(let r=range.s.r;r<=range.e.r;r++){
   const cells=[];for(let c=range.s.c;c<=range.e.c;c++){const cell=sheet[XLSX.utils.encode_cell({r,c})];if(cell&&cell.v!==undefined)cells.push({v:cell.v,c});}
   const values=cells.filter(c=>typeof c.v==='number'),labels=cells.filter(c=>typeof c.v!=='number').map(c=>String(c.v));
-  let text=labels.join('  ');if(totalColumn!==null){const n=amount(sheet[XLSX.utils.encode_cell({r,c:totalColumn})]?.v);if(n!==null)text+='  $'+(n/100).toFixed(2);}else if(values.length)text+='  $'+values[values.length-1].v.toFixed(2);
+  let text=labels.join('  ');if(totalColumn!==null){const n=amount(sheet[XLSX.utils.encode_cell({r,c:totalColumn})]?.v);if(n!==null)text+='  $'+(n/100).toFixed(2);}else text+=values.map(v=>'  $'+v.v.toFixed(2)).join('');
   if(text)rawLines.push({text,source:$('sheet').value+' row '+(r+1)});
  }
- $('raw').value=rawLines.map(l=>l.text).join('\n');loadLines(rawLines,$('sheet').value);
+ showAmountColumns(rawLines);const chosen=selectAmounts(rawLines);$('raw').value=chosen.map(l=>l.text).join('\n');loadLines(chosen,$('sheet').value);
 }
 $('sheet').onchange=()=>{try{excelLines();}catch(e){status(e.message);}};
 
@@ -136,7 +143,7 @@ $('file').onchange=async()=>{
  const file=$('file').files[0];if(!file)return;if(file.size>40*1024*1024){status('Please upload a file under 40 MB.');return;}
  setBusy(true);resetReview();sectionOrder={};rows=[];controls={};table();workbook=null;fileName=file.name;status('Reading '+file.name+'…');
  try{
-  if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
+  if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);showAmountColumns(rawLines);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
   else if(/\.(xlsx|xls|csv)$/i.test(file.name)){workbook=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false,raw:/\.csv$/i.test(file.name)});$('sheet').innerHTML=workbook.SheetNames.map(s=>`<option>${escape(s)}</option>`).join('');const match=workbook.SheetNames.find(s=>isBalanceSheetName(s));if(match)$('sheet').value=match;excelLines();}
   else throw Error('Choose PDF, XLSX, XLS, or CSV.');
   if(!$('company').value){const first=rawLines.find(l=>l.text.trim());if(first&&!/assets|balance sheet/i.test(first.text)&&first.text.length<130)$('company').value=first.text.trim();}
