@@ -49,6 +49,11 @@ function table(){
  $('empty').hidden=rows.length>0;$('restoreOrder').hidden=!Object.keys(sectionOrder).length;checks();
 }
 $('showSubtotals').onchange=table;
+let explanationEdited=false;
+function otherAssetTitles(list){
+ const titles=[];for(const r of list){if(!r.include||r.code!=='A230H')continue;const title=String(r.label||'').replace(/%/g,' percent').replace(/[<>]/g,'').replace(/\s+/g,' ').trim();if(title&&!titles.some(t=>t.toLowerCase()===title.toLowerCase()))titles.push(title);}
+ return titles.join(', ').slice(0,4000);
+}
 function checks(){
  const r=reconcile(rows,controls);
  const calculated=calculatedReview(r.groups);
@@ -56,9 +61,14 @@ function checks(){
  document.querySelectorAll('[data-net]').forEach(el=>{const c=r.groups[el.dataset.net]||0;el.innerHTML=money(c)+(rounded(c)*100!==c?'<br><small>NMLS: '+money(rounded(c)*100)+'</small>':'');});
  $('assetTotal').textContent=money(r.totals.Assets);$('liabilityTotal').textContent=money(r.totals.Liabilities);$('equityTotal').textContent=money(r.totals.Equity);$('difference').textContent=money(r.difference);
  const unclassified=rows.filter(x=>x.include&&!x.code).length;
- const needsExplanation=requiresOtherAssetsExplanation(r.groups);$('otherAssetsBox').hidden=!needsExplanation&&!$('otherAssetsExplanation').value.trim();
+ // The Other Assets explanation (A230J) is filled in from the titles of the accounts
+ // assigned to A230H, without amounts. It follows those accounts until the user edits it.
+ const otherTitles=otherAssetTitles(rows),box=$('otherAssetsExplanation');
+ if(!explanationEdited&&box.value!==otherTitles)box.value=otherTitles;
+ $('otherAssetsBox').hidden=!rows.some(x=>x.include&&x.code==='A230H')&&!box.value.trim();
+ $('otherAssetsReset').hidden=!explanationEdited||!otherTitles;
  $('differenceBox').className=r.count?(r.difference===0?'in-balance':'out-of-balance'):'';
- const messages=[...r.issues.filter(s=>!s.startsWith('Review the NMLS classification')),...(unclassified?[unclassified+' account'+(unclassified===1?' needs':'s need')+' an NMLS field. '+(unclassified===1?'It is':'They are')+' highlighted below.']:[]),...definitionIssues(r.groups,{otherAssetsExplanation:$('otherAssetsExplanation').value}).map(s=>s.startsWith('FV7: complete the A230J')?'Explain what makes up Other Assets in the box below (A230J). NMLS requires it when Other Assets is 5% or more of total assets.':s)];
+ const messages=[...r.issues.filter(s=>!s.startsWith('Review the NMLS classification')),...(unclassified?[unclassified+' account'+(unclassified===1?' needs':'s need')+' an NMLS field. '+(unclassified===1?'It is':'They are')+' highlighted below.']:[]),...definitionIssues(r.groups,{otherAssetsExplanation:$('otherAssetsExplanation').value}).map(s=>s.startsWith('FV7: complete the A230J')?'Enter the explanation of Other Assets (A230J) in the box below. NMLS requires it when Other Assets is 5% or more of total assets.':s)];
  const rounding=r.warnings.filter(s=>s.includes('rounding in a whole-dollar statement')),notes=[...r.warnings.filter(s=>!rounding.includes(s)),...(rounding.length?['The statement’s printed totals are off by a dollar or two from the sum of its own lines (rounding in the source). The detail lines are used.']:[])];if(r.roundingDifference)messages.push('Whole-dollar rounding difference: '+money(r.roundingDifference*100)+'. Review the grouped NMLS field amounts below.');
  $('checks').innerHTML=r.count?`<div class="notice ${messages.length?'':'success'}"><strong>${messages.length?'Review needed':'Balance checks passed'}</strong>${messages.length?'<ul>'+messages.map(s=>'<li>'+escape(s)+'</li>').join('')+'</ul>':'<p>Original amounts and rounded NMLS field totals balance.</p>'}${notes.length?'<p class="small">Note: '+notes.map(escape).join(' ')+'</p>':''}</div>`:'';
  $('definitionWarnings').textContent=definitionWarnings(r.groups).join(' ');
@@ -163,7 +173,7 @@ $('sheet').onchange=()=>{try{excelLines();}catch(e){status(e.message);}};
 
 $('file').onchange=async()=>{
  const file=$('file').files[0];if(!file)return;if(file.size>40*1024*1024){status('Please upload a file under 40 MB.');return;}
- setBusy(true);resetReview();sectionOrder={};rows=[];controls={};table();workbook=null;fileName=file.name;$('bsPage').innerHTML='<option value="all">All pages (automatic)</option>';status('Reading '+file.name+'…');
+ setBusy(true);resetReview();sectionOrder={};rows=[];controls={};explanationEdited=false;table();workbook=null;fileName=file.name;$('bsPage').innerHTML='<option value="all">All pages (automatic)</option>';status('Reading '+file.name+'…');
  try{
   if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);$('bsPage').innerHTML=pageOptions(rawLines,escape,tidyLabel).html;showAmountColumns(rawLines);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
   else if(/\.(xlsx|xls|csv)$/i.test(file.name)){workbook=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false,raw:/\.csv$/i.test(file.name)});$('sheet').innerHTML=workbook.SheetNames.map(s=>`<option>${escape(s)}</option>`).join('');const match=workbook.SheetNames.find(s=>isBalanceSheetName(s));if(match)$('sheet').value=match;excelLines();}
@@ -181,7 +191,8 @@ updateReportingDate();
 
 const allocator=mountAllocator({getBalance:()=>({...reconcile(rows,controls),sources:rows.filter(r=>r.include).reduce((m,r)=>{m[r.code]=m[r.code]?m[r.code]+'; '+r.source:r.source;return m;},{})}),readPdf:pdfLines,getSource:()=>({lines:selectAmounts(rawLines),name:fileName}),getMeta:()=>({company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}),onChange:resetReview});
 
-$('otherAssetsExplanation').addEventListener('input',()=>{resetReview();checks();});
+$('otherAssetsExplanation').addEventListener('input',()=>{explanationEdited=true;resetReview();checks();});
+$('otherAssetsReset').onclick=()=>{explanationEdited=false;resetReview();checks();};
 mountCombined(()=>({otherAssetsExplanation:$('otherAssetsExplanation').value.trim(),company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value,period:$('xmlPeriod').value}),()=>{const result=checks();if(!result.count)throw Error('Review and include the balance sheet accounts in the Schedules A & B review first.');return {...result,meta:{company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}};},()=>allocator.getReport());
 
 $('expenseGuidance').innerHTML='<ul>'+['C210','C220','C230','C240','C770','D010','D020','D030','D040','D050','D060','D110','D150','D160','D200','D210','D220','D230','D280','C150','D310','D510'].map(c=>'<li><a target="_blank" rel="noopener" href="'+sourceLink(c)+'">'+c+'</a> — '+escape(guide(c))+'</li>').join('')+'</ul>';

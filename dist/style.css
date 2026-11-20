@@ -150,3 +150,6 @@ label.include-line input{width:auto;margin:0}
 @media(max-width:800px){.split-revenue{grid-template-columns:1fr}}
 #review table.bs-review .calculated-row td[data-net]{text-align:right;font-size:14px;padding-right:16px!important;font-variant-numeric:tabular-nums}
 #review table.bs-review .field-net td{font-weight:600;border-top:1px dashed #B3C2CA}
+.link-button{all:unset;cursor:pointer;color:#985448;text-decoration:underline;font:inherit}
+.link-button:focus-visible{outline:2px solid #985448;outline-offset:2px}
+#review #otherAssetsBox p{margin:4px 0 0}
