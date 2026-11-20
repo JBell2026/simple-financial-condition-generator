@@ -15,6 +15,27 @@ export function amount(v){
  if(/^-?\d+(\.\d{1,2})?-$/.test(s))s='-'+s.slice(0,-1);
  return /^[-+]?\d+(\.\d{1,2})?$/.test(s)?Math.round(Number(s)*100):null;
 }
+// Names printed in ALL CAPS on a statement are shown in normal capitalization:
+// each word capitalized, short joining words lowercase, known abbreviations kept.
+const smallWords=new Set(['a','an','and','as','at','but','by','for','from','in','of','on','or','per','the','to','vs','with']);
+const abbreviations=new Set(['LLC','LLP','LP','PLLC','PC','INC','MLO','MLOS','NMLS','AMEX','SBA','IRS','FICA','FUTA','SUTA','SUI','LOS','CPA','PPP','EIDL','USA','US','HOA','IT','HR','ADP','HELOC','FHA','VA','USDA','UPS','USPS','AP','AR','CC','LOC','PTO','HSA','FSA','IRA','SEP','ACH','ATM','MSR','REO','MBS','CEO','CFO','COO','DBA','FKA','II','III','IV','YTD','QBO','GAAP','EBITDA','P&L','A/R','A/P','R&D','G&A','T&E','AT&T']);
+export function tidyLabel(label){
+ const text=String(label??'');if(!/[A-Z]{2}/.test(text)||/[a-z]/.test(text))return text;
+ let first=true;
+ return text.replace(/[A-Z0-9][A-Z0-9&/'’.]*/g,word=>{
+  const bare=word.replace(/[.'’]+$/,''),start=first;first=false;
+  if(/^401\(?K\)?$/i.test(word))return word.toLowerCase();
+  if(bare==='INC')return 'Inc'+word.slice(3);
+  if(abbreviations.has(bare)||/\d/.test(bare)&&!/[A-Z]{3}/.test(bare)||/^[B-DF-HJ-NP-TV-XZ]{2,5}$/.test(bare))return word; // listed abbreviations, codes, vowel-less initials
+  const lower=word.toLowerCase();
+  if(!start&&smallWords.has(lower))return lower;
+  return lower.replace(/(^|[/&])([a-z])/g,(m,p,c)=>p+c.toUpperCase());
+ }).replace(/\(K\)/g,'(k)');
+}
+// Dollar amounts in messages: $1,234.56, with a leading minus when negative.
+export const usd=cents=>(cents<0?'-':'')+'$'+(Math.abs(cents)/100).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const plural=(n,word,many=word+'s')=>n+' '+(n===1?word:many);
+export {plural};
 export function rounded(cents){return Math.sign(cents)*Math.round(Math.abs(cents)/100);}
 export function needsOcr(lines){
  const text=lines.join(' ');const compact=text.replace(/\s/g,'');
@@ -52,9 +73,9 @@ export function exportXml(result,meta){
   if(['A060','A062'].includes(code)){if(cents!==0)throw Error(code+' is a review balance. Complete the detailed mortgage-loans-held-for-sale schedule in NMLS before filing; the XML schema does not accept this summary field directly.');continue;}
   const tag=code+'_1',section=Object.keys(fcSchema).find(name=>fcSchema[name][tag]);
   const type=section&&fcSchema[section][tag];
-  if(!type)throw Error('Unsupported NMLS XML field: '+code);
+  if(!type)throw Error('Unsupported NMLS XML field: '+code+'.');
   const n=rounded(cents);
-  if(!Number.isSafeInteger(cents)||!Number.isSafeInteger(n)||Math.abs(n)>9999999999999)throw Error('Invalid XML amount for '+code);
+  if(!Number.isSafeInteger(cents)||!Number.isSafeInteger(n)||Math.abs(n)>9999999999999)throw Error('Invalid XML amount for '+code+'.');
   if(['PositiveDollar','Count'].includes(type)&&n<0)throw Error(code+' cannot be negative.');
   sections[section].push(`      <${tag}>${n}</${tag}>`);
  }
@@ -162,7 +183,7 @@ function currentAssetBreakdown(supplements, expected){
     if(cents===expected&&details.length&&details.every(row=>row.code)&&details.reduce((sum,row)=>sum+row.cents,0)===expected)candidates.push(details);
     details=null;
    }else if(label&&cents!==null){
-    details.push({label,cents,section:'Assets',code:suggest(label,'Assets'),include:true,source:label+' ('+line.source+')'});
+    details.push({label:tidyLabel(label),cents,section:'Assets',code:suggest(label,'Assets'),include:true,source:label+' ('+line.source+')'});
    }else details=null;
   }
  }
@@ -186,7 +207,7 @@ export function parseLines(lines,{supplements=[]}={}){
    else if(/^(?:(?:members?|owners?|stockholders?|shareholders?)[’'s\s]*)?equity$/i.test(heading))section='Equity';
    continue;
   }
-  const first=matches[0],label=text.slice(0,first.index).trim().replace(/\s+/g,' ').replace(accountNumber,'').replace(/^[·•\-–—]\s*/,'');
+  const first=matches[0],label=text.slice(0,first.index).trim().replace(/\s+/g,' ').replace(accountNumber,'').replace(/^[·•\-–—]\s*/,'');const shown=tidyLabel(label);
   if(!label||!section)continue;
   if(matches.length>1){notes.push(source+': multiple amounts. Choose the amount column before importing.');continue;}
   const cents=amount(first[0]);if(cents===null)continue;
@@ -209,8 +230,8 @@ export function parseLines(lines,{supplements=[]}={}){
   if(fixedLine)fixedStart=rows.length;
   const contraOtherAsset=otherAssets&&/^accumulated amorti[sz]ation$/i.test(label);
   let code=fixedTotal?'A180':total?'':contraOtherAsset?'A230H':cashCode||suggest(label,section),basis=code?'account name':'';
-  if(!total&&!code){code=suggestFromHeading(group,section);if(code)basis='group heading “'+group+'”';}
-  if(!total&&/long.term|non.?current/i.test(group)&&(code==='B090'||code==='B080')){code=code==='B090'?'B140':'B130';basis='group heading “'+group+'”';}
+  if(!total&&!code){code=suggestFromHeading(group,section);if(code)basis='group heading “'+tidyLabel(group)+'”';}
+  if(!total&&/long.term|non.?current/i.test(group)&&(code==='B090'||code==='B080')){code=code==='B090'?'B140':'B130';basis='group heading “'+tidyLabel(group)+'”';}
   if(total)group='';
   const needsReview=section==='Assets'&&/^other current assets$/i.test(label);
   const breakdown=needsReview?currentAssetBreakdown(supplements,cents):null;
@@ -220,7 +241,7 @@ export function parseLines(lines,{supplements=[]}={}){
   }
   // Every detail account is kept. An account without a recognized NMLS field stays in
   // the review as unclassified instead of being dropped, so the statement still foots.
-  rows.push({id:rows.length+1,label,cents,section,code,basis,include:fixedTotal||!total,source:label+' $'+(cents/100).toFixed(2)+' ('+source+')'+(basis.startsWith('group')?' — suggested from '+basis:''),total:false,fixedTotal});
+  rows.push({id:rows.length+1,label:shown,cents,section,code,basis,include:fixedTotal||!total,source:label+' '+usd(cents)+' ('+source+')'+(basis.startsWith('group')?' — suggested from '+basis:''),total:false,fixedTotal});
  }
  const grouped=new Map();
  for(const row of rows.filter(r=>r.include&&r.code)){
@@ -235,12 +256,12 @@ export function reconcile(rows,controls={}){
  const selected=rows.filter(r=>r.include);const totals={Assets:0,Liabilities:0,Equity:0},groups={};const issues=[],warnings=[];
  // A whole-dollar statement whose own totals are a few dollars off the sum of its lines
  // is source rounding: reported as a warning, not as a blocking difference.
- const wholeDollars=selected.length>0&&selected.every(r=>Number.isSafeInteger(r.cents)&&r.cents%100===0),sourceDiff=(text,delta)=>{if(wholeDollars&&Math.abs(delta)<=300)warnings.push(text+' by '+(delta/100).toFixed(2)+' — rounding in a whole-dollar statement; the detail lines are used.');else issues.push(text+' by '+(delta/100).toFixed(2));};
+ const wholeDollars=selected.length>0&&selected.every(r=>Number.isSafeInteger(r.cents)&&r.cents%100===0),sourceDiff=(text,delta)=>{if(wholeDollars&&Math.abs(delta)<=300)warnings.push(text+' by '+usd(delta)+' — rounding in a whole-dollar statement; the detail lines are used.');else issues.push(text+' by '+usd(delta)+'.');};
  for(const r of selected){
-  if(!Number.isSafeInteger(r.cents)){issues.push('Invalid amount: '+r.label);continue;}
-  if(!(r.section in totals)){issues.push('Select a section: '+r.label);continue;}
+  if(!Number.isSafeInteger(r.cents)){issues.push('Invalid amount: '+r.label+'.');continue;}
+  if(!(r.section in totals)){issues.push('Select a section: '+r.label+'.');continue;}
   totals[r.section]+=r.cents;
-  if(!r.code||!fields[r.code]||fields[r.code][1]!==r.section)issues.push('Review the NMLS classification: '+r.label);
+  if(!r.code||!fields[r.code]||fields[r.code][1]!==r.section)issues.push('Review the NMLS classification: '+r.label+'.');
   else groups[r.code]=(groups[r.code]||0)+r.cents;
  }
  if(controls.currentLiabilities!==undefined){
@@ -251,7 +272,7 @@ export function reconcile(rows,controls={}){
  if(controls.fixedAssets!==undefined){const detail=selected.filter(r=>r.fixedDetail&&Number.isSafeInteger(r.cents)).reduce((t,r)=>t+r.cents,0);if(detail!==controls.fixedAssets)sourceDiff('Source net fixed assets differs',detail-controls.fixedAssets);}
  for(const c of ['A010','A020'])if(controls[c]!==undefined&&(groups[c]||0)!==controls[c])sourceDiff('Source '+c+' cash subtotal differs',(groups[c]||0)-controls[c]);
  const difference=totals.Assets-totals.Liabilities-totals.Equity;
- if(difference!==0)issues.push('Balance sheet difference: '+(difference/100).toFixed(2));
+ if(difference!==0)issues.push('Balance sheet difference: '+usd(difference)+'.');
  for(const [key,actual] of Object.entries({assets:totals.Assets,liabilities:totals.Liabilities,equity:totals.Equity,combined:totals.Liabilities+totals.Equity})){
   if(controls[key]!==undefined&&controls[key]!==actual)sourceDiff('Source '+key+' total differs',actual-controls[key]);
  }

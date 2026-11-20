@@ -1,6 +1,6 @@
 import {dFields,dFieldMap,suggestD,splitExpense,extractPLFigures,buildScheduleD,addScheduleWorkbook,dReviewRows} from './schedule-d.mjs';
 import {addBalanceReview} from './calculated.mjs';
-import {amount,moneyMatches,selectTotalAmountLine,selectAmountsByPage} from './engine.mjs';
+import {amount,moneyMatches,selectTotalAmountLine,selectAmountsByPage,tidyLabel,plural} from './engine.mjs';
 import {isBalanceSheetTitle,isOtherStatementTitle,pageOptions,onlyPage} from './balance-source.mjs';
 export const categories=[['A','Payroll Director'],['B','Payroll'],['C','Benefits'],['D','Payroll Expenses'],['E','Occupancy and Equipment'],['F','Technology Related'],['G','Outsourcing'],['H','Professional'],['I','Other'],['J','Interest Paid']];
 export function classifyExpense(label){
@@ -22,7 +22,7 @@ export function parseExpenses(lines,includeCogs=false){
  const pages=new Map();for(const entry of lines){if(entry?.page!=null){if(!pages.has(entry.page))pages.set(entry.page,[]);pages.get(entry.page).push(entry.text||'');}}
  const excludedPages=new Set([...pages].filter(([,texts])=>(!texts.some(t=>isOtherStatementTitle(t))&&texts.some(t=>isBalanceSheetTitle(t)||/^(?:(?:consolidated|comparative|combined|condensed|unaudited)\s+)*(?:statements?\s+of\s+)?cash\s*flows?/i.test(t.trim())))||(!texts.some(t=>isOtherStatementTitle(t))&&texts.some(t=>/^assets\s*$/i.test(t.trim()))&&texts.some(t=>/^(?:total\s+)?liabilities\b/i.test(t.trim())))).map(([page])=>page));
  let lastPage;
- const push=(label,cents,source,category,group)=>out.push({id:out.length+1,label,cents,source,category:category||classifyExpense(label),include:true,...(group?{group}:{})});
+ const push=(label,cents,source,category,group)=>out.push({id:out.length+1,label:tidyLabel(label),cents,source,category:category||classifyExpense(label),include:true,...(group?{group}:{})});
  // Cost of revenue is tracked separately. Its lines join the expense list only when
  // includeCogs is on; a heading or total amount is used only when no detail lines exist.
  const costLine=(label,cents,source)=>{costOfRevenue.total+=cents;costOfRevenue.count++;if(includeCogs)push(label,cents,source,undefined,'Cost of revenue');};
@@ -67,7 +67,7 @@ export function parseExpenses(lines,includeCogs=false){
 }
 export function expenseSummary(rows){
  const active=rows.filter(r=>r.include),counts={},totals={};const issues=[];
- for(const r of active){if(!Number.isSafeInteger(r.cents))issues.push('Invalid amount: '+r.label);if(!categories.some(([c])=>c===r.category))issues.push('Choose a category: '+r.label);counts[r.category]=(counts[r.category]||0)+1;totals[r.category]=(totals[r.category]||0)+(r.cents||0);}
+ for(const r of active){if(!Number.isSafeInteger(r.cents))issues.push('Invalid amount: '+r.label+'.');if(!categories.some(([c])=>c===r.category))issues.push('Choose a category: '+r.label+'.');counts[r.category]=(counts[r.category]||0)+1;totals[r.category]=(totals[r.category]||0)+(r.cents||0);}
  if(active.length>75)issues.push('Include no more than 75 expenses.');
  for(const [c,n]of Object.entries(counts))if(n>25)issues.push((categories.find(([v])=>v===c)?.[1]||c)+' exceeds 25 entries.');
  return {active,counts,totals,issues,total:active.reduce((s,r)=>s+(r.cents||0),0)};
@@ -77,7 +77,7 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
  let rows=[],file=null,book=null,lastLines=[],sourceName='',busy=false,cost={total:0,count:0};
  function message(s){$('expenseStatus').textContent=s;}
  function render(){
-  $('expenseRows').innerHTML=rows.map(r=>`<tr data-id="${r.id}"><td><input type="checkbox" data-key="include" aria-label="Include expense ${esc(r.label)}" ${r.include?'checked':''}></td><td><input data-key="label" aria-label="Expense description" value="${esc(r.label)}"></td><td><input data-key="cents" aria-label="Expense amount" value="${r.cents===null?'':(r.cents/100).toFixed(2)}" inputmode="decimal"></td><td><select data-key="category" aria-label="Expense category">${categories.map(([c,n])=>`<option value="${c}" ${r.category===c?'selected':''}>${c} - ${n}</option>`).join('')}</select></td><td data-confidence="${r.id}"></td><td><details class="row-detail"><summary>Source</summary>${esc(r.source)}</details></td><td><button data-remove="${r.id}" aria-label="Remove expense">×</button></td></tr>`).join('');
+  $('expenseRows').innerHTML=rows.map(r=>`<tr data-id="${r.id}"><td><input type="checkbox" data-key="include" aria-label="Include expense ${esc(r.label)}" ${r.include?'checked':''}></td><td><input data-key="label" aria-label="Expense description" value="${esc(r.label)}"></td><td><input data-key="cents" aria-label="Expense amount" value="${r.cents===null?'':(r.cents/100).toFixed(2)}" inputmode="decimal"></td><td><select data-key="category" aria-label="Expense category">${categories.map(([c,n])=>`<option value="${c}" ${r.category===c?'selected':''}>${c} — ${n}</option>`).join('')}</select></td><td data-confidence="${r.id}"></td><td><details class="row-detail"><summary>Source</summary>${esc(r.source)}</details></td><td><button data-remove="${r.id}" aria-label="Remove expense">×</button></td></tr>`).join('');
   $('scheduleAllocationRows').innerHTML=rows.map(r=>`<tr data-id="${r.id}"><td>${esc(r.label)}</td><td>${money(r.cents||0)}</td><td><select data-key="field" aria-label="Schedule D field"><option value="">Select NMLS field</option>${['Interest expense','Personnel','Operating expenses','Corporate allocations','Taxes and adjustments'].map(section=>`<optgroup label="${section==='Interest expense'?'Schedule C — Interest expense':'Schedule D — '+section}">${dFields.filter(f=>f.section===section).map(f=>`<option value="${f.code}" ${r.field===f.code?'selected':''}>${f.code} — ${esc(f.label)}</option>`).join('')}</optgroup>`).join('')}</select></td><td><button type="button" class="secondary" data-split="${r.id}">Split</button></td></tr>`).join('');
   $('expenseEmpty').hidden=rows.length>0;summary();
  }
@@ -99,11 +99,11 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
  // Worksheet and column pickers apply to Excel P&Ls only.
  // A new source resets the page picker; picking a page re-reads only that page.
  let sourceLines=[];
- function setSource(lines,name){sourceLines=lines;const pages=pageOptions(lines,esc);$('plPage').innerHTML=pages.html;$('plPage').closest('label').hidden=pages.count<2;load(lines,name);}
- $('plPage').onchange=()=>{const v=$('plPage').value;load(onlyPage(sourceLines,v),sourceName);if(v!=='all')message(rows.length?`${rows.length} expense lines read from page ${v} of ${sourceName} only. Review each allocation.`:`No expense lines were found on page ${v}.`);};
+ function setSource(lines,name){sourceLines=lines;const pages=pageOptions(lines,esc,tidyLabel);$('plPage').innerHTML=pages.html;$('plPage').closest('label').hidden=pages.count<2;load(lines,name);}
+ $('plPage').onchange=()=>{const v=$('plPage').value;load(onlyPage(sourceLines,v),sourceName);if(v!=='all')message(rows.length?`${plural(rows.length,'expense line')} read from page ${v} of ${sourceName} only. Review each allocation.`:`No expense lines were found on page ${v}.`);};
  function showChoices(){$('expenseSheet').closest('label').hidden=!book||$('expenseSheet').options.length<2;$('expenseColumn').closest('label').hidden=!book;}
  function setBusy(v){if(!v)showChoices();busy=v;['expenseFile','useStatement','analyzeExpenses','downloadExpenses','expenseSheet','expenseColumn','includeCogs','plPage'].forEach(id=>$(id).disabled=v);summary();}
- function load(lines,name){lastLines=lines;sourceName=name;const parsed=parseExpenses(lines,$('includeCogs').checked);cost=parsed.costOfRevenue;const repeatedLines=parsed.repeatedLines;rows=parsed.map(r=>{const field=suggestD(r.label,r.category);return {...r,field,category:r.category};});const figures=extractPLFigures(lines);if(figures.gross!==undefined)$('scheduleGross').value=(figures.gross/100).toFixed(2);$('scheduleInterest').value=figures.interest===undefined?'':(figures.interest/100).toFixed(2);if(figures.reportedNet!==undefined)$('scheduleNet').value=(figures.reportedNet/100).toFixed(2);onChange();render();message(rows.length?`${rows.length} expense lines from ${name}. Review each allocation.`+(repeatedLines>2?` The first income statement, through its net income line, was imported; ${repeatedLines} amount lines after it (a second presentation or supporting schedule) were left out so nothing is counted twice.`:''):'No expense lines were recognized. Check that the PDF includes an Expenses or Cost of Revenue section. If this continues, share the PDF so we can check its layout.');}
+ function load(lines,name){lastLines=lines;sourceName=name;const parsed=parseExpenses(lines,$('includeCogs').checked);cost=parsed.costOfRevenue;const repeatedLines=parsed.repeatedLines;rows=parsed.map(r=>{const field=suggestD(r.label,r.category);return {...r,field,category:r.category};});const figures=extractPLFigures(lines);if(figures.gross!==undefined)$('scheduleGross').value=(figures.gross/100).toFixed(2);$('scheduleInterest').value=figures.interest===undefined?'':(figures.interest/100).toFixed(2);if(figures.reportedNet!==undefined)$('scheduleNet').value=(figures.reportedNet/100).toFixed(2);onChange();render();message(rows.length?`${plural(rows.length,'expense line')} from ${name}. Review each allocation.`+(repeatedLines>2?` The first income statement, through its net income line, was imported; ${repeatedLines} amount lines after it (a second presentation or a supporting schedule) were left out so nothing is counted twice.`:''):'No expense lines were recognized. Check that the PDF includes an Expenses or Cost of Revenue section. If this continues, share the PDF so we can check its layout.');}
  // Pick the amount column of an Excel P&L: a column headed Total if there is one,
  // otherwise the rightmost column among those holding the most numbers.
  function detectColumn(){

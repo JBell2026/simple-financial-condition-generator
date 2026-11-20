@@ -1,7 +1,7 @@
 import {readScheduleWorkbook,dReviewRows,incomeSplit} from './schedule-d.mjs';
 import {calculatedReview,orderedReview} from './calculated.mjs';
 import {guide,sourceLink,definitionIssues,definitionWarnings} from './fv7.mjs';
-import {amount,rounded,fields,reconcile,exportXml,scheduleOFields} from './engine.mjs';
+import {amount,rounded,fields,reconcile,exportXml,scheduleOFields,usd} from './engine.mjs';
 import {fcSchema} from './fc-schema.mjs';
 const columnCodes=['D050',null,'D150','D160','D200','D210','D220','D230','D280','C150'];
 export function readSfc(book,options={}){
@@ -10,14 +10,14 @@ export function readSfc(book,options={}){
  if(!match)throw Error('The SFC worksheet mapping row (D050 through C150) was not found. Upload the completed SFC template.');
  const [name,s]=match;const mapping=Object.entries(s).find(([key,c])=>/^A\d+$/.test(key)&&String(c.v).trim().toUpperCase()==='D050');const mapRow=Number(mapping[0].slice(1)),totalRow=mapRow-1,shift=totalRow-21;
  if(totalRow<4||totalRow>100)throw Error('Unrecognized SFC worksheet layout.');
- function value(address,required=false){const c=s[address];if(c?.t==='e')throw Error('Excel error in '+name+'!'+address);const n=amount(c?.v);if(required&&n===null)throw Error('Complete '+name+'!'+address+' before generating XML.');return n;}
+ function value(address,required=false){const c=s[address];if(c?.t==='e')throw Error('Excel error in '+name+'!'+address+'.');const n=amount(c?.v);if(required&&n===null)throw Error('Complete '+name+'!'+address+' before generating XML.');return n;}
  const groups={},issues=[],categoryTotals=[];let entries=0;
  for(let col=0;col<10;col++){
   const letter=String.fromCharCode(65+col);let sum=0,count=0;
   for(let row=3;row<totalRow;row++){const c=s[letter+row];if(c?.v===undefined||c.v==='')continue;const n=value(letter+row,true);sum+=n;if(n!==0){count++;entries++;}}
   if(count>25)issues.push('Column '+letter+' has more than 25 expense entries.');
   const code=col===1?options.payrollField:columnCodes[col];if(!code&&sum!==0)issues.push('Select the underlying payroll field for column B. D070 is a calculated total, not an XML input.');
-  if(code){if(!fcSchema.ScheduleCSection[code+'_1']&&!fcSchema.ScheduleDSection[code+'_1'])throw Error('Unsupported expense field '+code);groups[code]=(groups[code]||0)+sum;}
+  if(code){if(!fcSchema.ScheduleCSection[code+'_1']&&!fcSchema.ScheduleDSection[code+'_1'])throw Error('Unsupported expense field '+code+'.');groups[code]=(groups[code]||0)+sum;}
   categoryTotals.push(sum);
  }
  if(entries>75)issues.push('The worksheet contains more than 75 nonzero expense entries.');
@@ -29,21 +29,21 @@ export function readSfc(book,options={}){
  groups[incomeField]=gross-interest-split.cents;if(split.field)groups[split.field]=split.cents;groups.C060=interest;
  groups.D310=expenses;groups.D510=net;
  const originalDifference=gross-expenses-net;
- if(originalDifference!==0)issues.push('SFC gross income less expenses differs from net income by $'+(originalDifference/100).toFixed(2)+'. Correct the completed worksheet.');
+ if(originalDifference!==0)issues.push('SFC gross income less expenses differs from net income by '+usd(originalDifference)+'. Correct the completed worksheet.');
  const categoryRounded=Object.entries(groups).filter(([c])=>columnCodes.includes(c)||c===options.payrollField).reduce((sum,[,v])=>sum+rounded(v),0);
  const roundingExpenseDifference=categoryRounded-rounded(expenses);
  const roundingNetDifference=rounded(gross)-rounded(expenses)-rounded(net);
  const roundingGrossDifference=rounded(gross-interest-split.cents)+rounded(split.cents)+rounded(interest)-rounded(gross);
- if(roundingExpenseDifference)issues.push('SFC expense fields have a whole-dollar rounding difference of $'+roundingExpenseDifference+'.');
- if(roundingNetDifference)issues.push('SFC whole-dollar income / expense / net income difference is $'+roundingNetDifference+'.');
- if(roundingGrossDifference)issues.push('SFC gross income fields have a whole-dollar rounding difference of $'+roundingGrossDifference+'.');
+ if(roundingExpenseDifference)issues.push('SFC expense fields have a whole-dollar rounding difference of '+usd(roundingExpenseDifference*100)+'.');
+ if(roundingNetDifference)issues.push('SFC whole-dollar income / expense / net income difference is '+usd(roundingNetDifference*100)+'.');
+ if(roundingGrossDifference)issues.push('SFC gross income fields have a whole-dollar rounding difference of '+usd(roundingGrossDifference*100)+'.');
  const metadata=book.Sheets['Client and Sources'];const meta={company:metadata?.B1?.v,nmls:metadata?.B2?.v,date:metadata?.B3?.v};
  return {groups,issues,meta,gross,expenses,net,name,payrollTotal:categoryTotals[1],grossSource:name+'!'+(override!==null?overrideAddress:grossAddress),entryCount:entries};
 }
 export function readBalance(book){
  for(const [name,s]of Object.entries(book.Sheets)){
   const data=XLSX.utils.sheet_to_json(s,{defval:''});if(!data.length||!Object.hasOwn(data[0],'NMLS Field')||!Object.hasOwn(data[0],'Amount'))continue;
-  const rows=data.map((r,i)=>{const code=String(r['NMLS Field']).trim();if(!fields[code])throw Error('Unrecognized balance sheet field '+code+' on row '+(i+2));const cents=amount(r.Amount);if(cents===null)throw Error('Invalid balance sheet amount on row '+(i+2));return {include:true,code,cents,label:r.Description||code,section:fields[code][1]};});
+  const rows=data.map((r,i)=>{const code=String(r['NMLS Field']).trim();if(!fields[code])throw Error('Unrecognized balance sheet field '+code+' on row '+(i+2)+'.');const cents=amount(r.Amount);if(cents===null)throw Error('Invalid balance sheet amount on row '+(i+2)+'.');return {include:true,code,cents,label:r.Description||code,section:fields[code][1]};});
   const result=reconcile(rows);if(!rows.length)throw Error('The balance sheet contains no fields.');const first=data[0];
   if(data.some(r=>amount(r['Balance Difference'])!==null&&amount(r['Balance Difference'])!==0))result.issues.push('The uploaded balance sheet records an unresolved original balance difference.');
   if(data.some(r=>amount(r['Rounding Difference'])!==null&&amount(r['Rounding Difference'])!==0))result.issues.push('The uploaded balance sheet records an unresolved rounding difference.');
@@ -56,7 +56,7 @@ export function combineReports(balance,sfc,meta){
  const issues=[...balance.issues,...sfc.issues,...definitionIssues({...balance.groups,...sfc.groups},meta)];
  for(const report of [balance,sfc])for(const key of ['company','nmls','date']){
   const actual=String(report.meta?.[key]??'').trim(),expected=String(meta[key]??'').trim();
-  if(actual&&expected&&actual.toLowerCase()!==expected.toLowerCase())issues.push('Uploaded '+key+' does not match the selected client / reporting details.');
+  if(actual&&expected&&actual.toLowerCase()!==expected.toLowerCase())issues.push('The uploaded '+({company:'company name',nmls:'NMLS ID',date:'reporting date'}[key])+' does not match the selected client and reporting details.');
  }
  if(balance.groups.B300!==undefined&&rounded(balance.groups.B300)!==rounded(sfc.net))issues.push('Balance sheet B300 does not match SFC net income under your selected filing treatment.');
  const result={...balance,groups:{...balance.groups,...sfc.groups},issues};
@@ -81,8 +81,8 @@ export function mountCombined(getMeta,getBalance,getSchedule){
    reviewed.metadata=JSON.stringify(meta);
    const headers='<table><thead><tr><th>NMLS field</th><th>Original amount</th><th>XML amount</th></tr></thead><tbody>';
    $('combinedPreview').innerHTML='<p>'+esc(definitionWarnings(balance.groups).join(' '))+'</p><p>Gross income source: '+esc(sfc.grossSource)+'</p>'+headers+Object.entries(reviewed.result.groups).filter(([c])=>!fields[c]).sort().map(([c,v])=>'<tr><td>'+c+'<br><small>'+esc(guide(c))+' <a href="'+sourceLink(c)+'" target="_blank" rel="noopener">FV7</a></small></td><td>$'+(v/100).toFixed(2)+'</td><td>'+rounded(v)+'</td></tr>').join('')+'</tbody></table>';
-   $('combinedPreview').innerHTML+='<h3>Balance sheet in NMLS filing order</h3>'+headers+['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="3">'+section+'</th></tr>'+orderedReview(balance.groups).filter(r=>r.section===section).map(r=>'<tr class="calculated-row"><td>'+r.code+' — '+esc(r.label)+'<br><small>'+esc(r.formula||'Input')+'</small></td><td>$'+(r.cents/100).toFixed(2)+'</td><td>'+r.whole+'</td></tr>').join('')).join('')+'</tbody></table><p class="small">Calculated checks are review only; unassigned inputs count as zero.</p>';
-   if(sfc.calculated)$('combinedPreview').innerHTML+='<h3>Schedules C & D filing review</h3>'+headers+dReviewRows(sfc).map(r=>'<tr class="'+(r.deps?'calculated-row':'')+'"><td>'+r.code+' — '+esc(r.label)+'</td><td>$'+(r.cents/100).toFixed(2)+'</td><td>'+r.whole+'</td></tr>').join('')+'</tbody></table>';
+   $('combinedPreview').innerHTML+='<h3>Balance sheet in NMLS filing order</h3>'+headers+['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="3">'+section+'</th></tr>'+orderedReview(balance.groups).filter(r=>r.section===section).map(r=>'<tr class="calculated-row"><td>'+r.code+' — '+esc(r.label)+'<br><small>'+esc(r.formula||'Input')+'</small></td><td>'+usd(r.cents)+'</td><td>'+r.whole+'</td></tr>').join('')).join('')+'</tbody></table><p class="small">Calculated checks are review only; unassigned inputs count as zero.</p>';
+   if(sfc.calculated)$('combinedPreview').innerHTML+='<h3>Schedules C & D filing review</h3>'+headers+dReviewRows(sfc).map(r=>'<tr class="'+(r.deps?'calculated-row':'')+'"><td>'+r.code+' — '+esc(r.label)+'</td><td>'+usd(r.cents)+'</td><td>'+r.whole+'</td></tr>').join('')+'</tbody></table>';
    $('combinedPreview').innerHTML+='<h3>Schedule O</h3><p>All '+scheduleOFields.length+' Schedule O fields ('+scheduleOFields[0].replace('_1','')+' through '+scheduleOFields.at(-1).replace('_1','')+') are included in the XML as 0.</p>';
    if(sfc.warnings?.length)$('combinedPreview').innerHTML+='<p>'+esc(sfc.warnings.join(' '))+'</p>';
    $('combinedStatus').textContent=reviewed.issues.length?reviewed.issues.join(' '):'Combined balance sheet and income statement checks passed. Confirm your review to download.';

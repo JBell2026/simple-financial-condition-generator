@@ -25,7 +25,7 @@ console.log('Balance Sheet title, page boundaries, worksheet titles and cash-flo
 const cash=parseLines(['Balance Sheet','Assets','Cash & Equivalents','SVB MCM Checking $726,086.75','Mercury MCM Checking - 5892 $151,200.17','Mercury MCM Treasury $523,657.54','First Bank $138,429.20','Total Cash & Equivalents $1,539,373.66','Other Current Assets','Unmapped $1.00']);
 assert.equal(cash.rows.find(r=>r.code==='A010').cents,153937366);
 assert.equal(cash.controls.A010,153937366);
-assert(cash.rows.find(r=>r.code==='A010').source.includes('First Bank $138429.20'));
+assert(cash.rows.find(r=>r.code==='A010').source.includes('First Bank $138,429.20'));
 const {reconcile}=await import('./dist/engine.mjs');
 assert(reconcile(cash.rows,{A010:153937367}).issues.some(s=>s.includes('cash subtotal')));
 console.log('Cash subsection includes all four accounts, excludes subtotal duplication, and validates source subtotal.');

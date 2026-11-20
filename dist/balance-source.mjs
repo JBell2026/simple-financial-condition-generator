@@ -47,5 +47,5 @@ export function pageList(lines){
  const pages=new Map();for(const l of lines){if(l?.page==null)continue;if(!pages.has(l.page))pages.set(l.page,[]);pages.get(l.page).push(String(l.text||'').trim());}
  return [...pages].map(([page,texts])=>{const named=texts.filter(t=>/[a-z]{3}/i.test(t)),title=named.find(t=>isBalanceSheetTitle(t)||isOtherStatementTitle(t))||named.slice(0,6).find(t=>/balance sheet|statement|profit|income|p\s*&\s*l|schedule/i.test(t))||named[0]||'';return {page,label:title.replace(/\s+/g,' ').slice(0,60)};});
 }
-export const pageOptions=(lines,escape)=>{const pages=pageList(lines);return {count:pages.length,html:'<option value="all">All pages (automatic)</option>'+pages.map(p=>'<option value="'+p.page+'">Only page '+p.page+(p.label?' — '+escape(p.label):'')+'</option>').join('')};};
+export const pageOptions=(lines,escape,tidy=s=>s)=>{const pages=pageList(lines).map(p=>({...p,label:tidy(p.label)}));return {count:pages.length,html:'<option value="all">All pages (automatic)</option>'+pages.map(p=>'<option value="'+p.page+'">Only page '+p.page+(p.label?' — '+escape(p.label):'')+'</option>').join('')};};
 export const onlyPage=(lines,value)=>value==='all'||value===undefined?lines:lines.filter(l=>String(l.page)===String(value));

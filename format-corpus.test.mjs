@@ -39,3 +39,11 @@ console.log('QuickBooks Online/Desktop, Xero, CPA-prepared, comparative and mana
 {const {pageList,onlyPage}=await import('./dist/balance-source.mjs');const lines=[{text:'Acme LLC',page:1},{text:'Statement of Operations',page:1},{text:'Rent  5.00',page:1},{text:'Acme LLC',page:2},{text:'Balance Sheet: as of September 30, 2026',page:2},{text:'12/31',page:3},{text:'Notes to management',page:3}];
  assert.deepEqual(pageList(lines).map(p=>[p.page,p.label]),[[1,'Statement of Operations'],[2,'Balance Sheet: as of September 30, 2026'],[3,'Notes to management']]);assert.equal(onlyPage(lines,'2').length,2);assert.equal(onlyPage(lines,'all').length,7);assert.deepEqual(pageList([{text:'x'}]),[]);}
 console.log('Page picker helpers passed.');
+// Names printed in all caps are shown in normal capitalization; mixed-case names are untouched.
+{const {tidyLabel,usd}=await import('./dist/engine.mjs');
+ for(const [input,expected] of [['CASH IN BANK','Cash in Bank'],['ACCUMULATED DEPRECIATION','Accumulated Depreciation'],['DUE FROM OFFICER','Due from Officer'],['AMEX','AMEX'],['CAPITAL ONE','Capital One'],['401(K) PAYABLE','401(k) Payable'],['NMLS LICENSING AND FEES','NMLS Licensing and Fees'],['SAMPLE FUNDING LLC','Sample Funding LLC'],['OFFICE/POSTAGE','Office/Postage'],['PAYROLL TAXES - FICA','Payroll Taxes - FICA'],['THE HOME TEAM, INC.','The Home Team, Inc.'],['Cash in bank','Cash in bank'],['Due to/from Parent Holdings, Inc.','Due to/from Parent Holdings, Inc.'],['QB','QB'],['',''] ])assert.equal(tidyLabel(input),expected,input);
+ const caps=parseLines(['BALANCE SHEET','ASSETS','CASH IN BANK  $100.00','DUE FROM OFFICER  $50.00','TOTAL ASSETS  $150.00','LIABILITIES','AMEX  $30.00','EQUITY','RETAINED EARNINGS  $120.00']);
+ assert.deepEqual(caps.rows.map(r=>[r.label,r.code]),[['Cash in Bank','A010'],['Due from Officer','A190'],['Retained Earnings','B280'],['AMEX','']]);assert(!caps.rows.some(r=>/[A-Z]{5}/.test(r.label)));assert(caps.rows[0].source.includes('CASH IN BANK $100.00'));
+ assert.deepEqual(parseExpenses(['PROFIT AND LOSS','EXPENSES','RENT  $50.00','OFFICER SALARY  $90.00','TOTAL EXPENSES  $140.00']).map(r=>r.label),['Rent','Officer Salary']);
+ assert.equal(usd(123456),'$1,234.56');assert.equal(usd(-100),'-$1.00');}
+console.log('Capitalization and amount formatting passed.');

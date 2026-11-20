@@ -3,7 +3,7 @@ import {balanceSheetSource,isBalanceSheetName,pageOptions,onlyPage} from './bala
 import {guide,sourceLink,definitionWarnings,definitionIssues,requiresOtherAssetsExplanation} from './fv7.mjs';
 import {mountCombined} from './combined.mjs';
 import {mountAllocator} from './expenses.mjs';
-import {fields,amount,rounded,parseLines,reconcile,reportingDate,needsOcr,amountColumns,selectAmountsByPage} from './engine.mjs';
+import {fields,amount,rounded,parseLines,reconcile,reportingDate,needsOcr,amountColumns,selectAmountsByPage,tidyLabel,plural} from './engine.mjs';
 import * as pdfjs from './vendor/pdf.mjs';
 pdfjs.GlobalWorkerOptions.workerSrc=new URL('./vendor/pdf.worker.mjs',import.meta.url).href;
 const $=id=>document.getElementById(id),money=v=>new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(v/100),escape=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -29,7 +29,7 @@ function sectionLayout(section){
 function findLayoutRow(key){return rows.find(r=>rowKey(r)===key)||calculations.find(r=>rowKey(r)===key);}
 function placeBalanceRow(key,targetKey,after=false){
  const row=findLayoutRow(key),target=findLayoutRow(targetKey);if(!row||!target||key===targetKey)return;
- if(row.section!==target.section){$('moveStatus').textContent='Move within the same section. Use the Section dropdown to change an input line’s section.';return;}
+ if(row.section!==target.section){$('moveStatus').textContent='Move lines within the same section. To change a line’s section, open Source on that line and choose a section.';return;}
  const order=sectionLayout(row.section).map(rowKey).filter(k=>k!==key),index=order.indexOf(targetKey);order.splice(index+(after?1:0),0,key);sectionOrder[row.section]=order;table();$('moveStatus').textContent='Line moved.';
 }
 const sectionTotals=['A240','B220','B350','B360'];
@@ -37,7 +37,7 @@ function moveControls(r){return '<button type="button" class="drag-handle" dragg
 
 function table(){
  const subtotals=$('showSubtotals').checked;
- const renderRow=r=>`<tr data-section="${r.section}" data-layout-key="${rowKey(r)}" data-id="${r.id}" class="input-row${r.code?'':' unclassified'}${r.include?'':' excluded'}"><td class="move-cell">${moveControls(r)}<input aria-label="Include ${escape(r.label)}" title="Include this line" type="checkbox" data-key="include" ${r.include?'checked':''}></td><td><input aria-label="Description" data-key="label" value="${escape(r.label)}"><details class="row-detail"><summary aria-label="Source for ${escape(r.label)}">Source</summary><div>${escape(r.source)}<label class="section-move">Section<select aria-label="Section" data-key="section">${['Assets','Liabilities','Equity'].map(s=>`<option ${r.section===s?'selected':''}>${s}</option>`).join('')}</select></label></div></details></td><td><select aria-label="NMLS field" data-key="code"><option value="">Choose a field…</option>${Object.entries(fields).filter(([k,f])=>f[1]===r.section).sort(([a],[b])=>filingCompare({code:a},{code:b})).map(([k,f])=>`<option value="${k}" ${k===r.code?'selected':''}>${k} - ${escape(f[0])}</option>`).join('')}</select></td><td><input aria-label="Amount in dollars" data-key="cents" inputmode="decimal" value="${r.cents===null?'':(r.cents/100).toFixed(2)}"></td><td class="row-actions"><button type="button" aria-label="Remove row" title="Remove line" data-remove="${r.id}">×</button></td></tr>`;
+ const renderRow=r=>`<tr data-section="${r.section}" data-layout-key="${rowKey(r)}" data-id="${r.id}" class="input-row${r.code?'':' unclassified'}${r.include?'':' excluded'}"><td class="move-cell">${moveControls(r)}<input aria-label="Include ${escape(r.label)}" title="Include this line" type="checkbox" data-key="include" ${r.include?'checked':''}></td><td><input aria-label="Description" data-key="label" value="${escape(r.label)}"><details class="row-detail"><summary aria-label="Source for ${escape(r.label)}">Source</summary><div>${escape(r.source)}<label class="section-move">Section<select aria-label="Section" data-key="section">${['Assets','Liabilities','Equity'].map(s=>`<option ${r.section===s?'selected':''}>${s}</option>`).join('')}</select></label></div></details></td><td><select aria-label="NMLS field" data-key="code"><option value="">Choose a field…</option>${Object.entries(fields).filter(([k,f])=>f[1]===r.section).sort(([a],[b])=>filingCompare({code:a},{code:b})).map(([k,f])=>`<option value="${k}" ${k===r.code?'selected':''}>${k} — ${escape(f[0])}</option>`).join('')}</select></td><td><input aria-label="Amount in dollars" data-key="cents" inputmode="decimal" value="${r.cents===null?'':(r.cents/100).toFixed(2)}"></td><td class="row-actions"><button type="button" aria-label="Remove row" title="Remove line" data-remove="${r.id}">×</button></td></tr>`;
  const renderCalc=r=>'<tr data-layout-key="'+rowKey(r)+'" class="calculated-row'+(sectionTotals.includes(r.code)?' section-total':'')+'" title="'+escape(r.code+' = '+r.deps.join(' + '))+'"><td></td><td>'+escape(r.label)+'</td><td>'+r.code+' <small>calculated</small></td><td data-calc="'+r.code+'"></td><td></td></tr>';
  // With subtotals hidden, each section lists its accounts and ends with its totals.
  // A field fed by several statement lines (for example fixed asset cost and accumulated
@@ -85,7 +85,7 @@ function loadLines(lines,sheetName='',{forced=false}={}){
  if(forced&&!source.matched)source={lines:[{text:'Balance Sheet',source:'Selected page'},...lines],excluded:[],supplements:[],matched:1};
  sectionOrder={};
  const result=parseLines(source.lines,{supplements:source.supplements.map(selectAmounts)});rows=result.rows;controls=result.controls;importNotes=result.notes;
- if(source.excluded.length)importNotes.push('Excluded '+source.excluded.length+' page(s) or source sections that are not balance sheet sections.');
+ if(source.excluded.length)importNotes.push(source.excluded.length===1?'One page or section that is not a balance sheet was left out.':source.excluded.length+' pages or sections that are not a balance sheet were left out.');
  if(!source.matched)importNotes.push('No balance sheet section was identified. Check the extracted headings and account lines below.');
  if(!rows.length)importNotes.push('No eligible balance sheet account amounts were found. Review the extracted text, select the correct worksheet, or add lines manually.');
  $('importNotes').hidden=!importNotes.length;$('importNotes').textContent=importNotes.join(' ');resetReview();table();
@@ -103,8 +103,8 @@ function showAmountColumns(lines){
 }
 $('amountColumn').onchange=()=>{try{if(workbook)loadLines(selectAmounts(rawLines),$('sheet').value);else if(rawLines.length)importPdfLines();}catch(e){status(e.message);}};
 
-function importPdfLines(){const page=$('bsPage').value,selected=selectAmounts(onlyPage(rawLines,page));$('raw').value=selected.map(l=>l.text).join('\n');loadLines(selected,'',{forced:page!=='all'});if(page!=='all')status(`${rows.filter(r=>r.include).length} detail lines read from page ${page} of ${fileName} only.`);}
-$('bsPage').onchange=()=>{try{showAmountColumns(onlyPage(rawLines,$('bsPage').value));importPdfLines();if($('bsPage').value==='all')status(`${rows.filter(r=>r.include).length} detail lines extracted from ${fileName}. Review every extracted line.`);}catch(e){status(e.message);}};
+function importPdfLines(){const page=$('bsPage').value,selected=selectAmounts(onlyPage(rawLines,page));$('raw').value=selected.map(l=>l.text).join('\n');loadLines(selected,'',{forced:page!=='all'});if(page!=='all')status(`${plural(rows.filter(r=>r.include).length,'detail line')} read from page ${page} of ${fileName} only.`);}
+$('bsPage').onchange=()=>{try{showAmountColumns(onlyPage(rawLines,$('bsPage').value));importPdfLines();if($('bsPage').value==='all')status(`${plural(rows.filter(r=>r.include).length,'detail line')} extracted from ${fileName}. Review every extracted line.`);}catch(e){status(e.message);}};
 async function pdfLines(file,progress=status,options={}){
  const doc=await pdfjs.getDocument({data:new Uint8Array(await file.arrayBuffer()),isEvalSupported:false}).promise;
  let lines=[],worker;
@@ -140,7 +140,7 @@ async function pdfLines(file,progress=status,options={}){
 function excelLines(){
  if(!workbook)return;const sheet=workbook.Sheets[$('sheet').value];if(!sheet)return;
  const titleCells=XLSX.utils.sheet_to_json(sheet,{header:1,defval:''}).flat().map(v=>({text:String(v)}));
- if(!balanceSheetSource(titleCells,{sheetName:$('sheet').value}).matched){rows=[];controls={};rawLines=[];$('raw').value='';resetReview();table();throw Error('Select a worksheet containing a balance sheet heading or Assets, Liabilities and Equity sections');}
+ if(!balanceSheetSource(titleCells,{sheetName:$('sheet').value}).matched){rows=[];controls={};rawLines=[];$('raw').value='';resetReview();table();throw Error('Select a worksheet that contains a balance sheet heading or Assets, Liabilities and Equity sections.');}
  const data=XLSX.utils.sheet_to_json(sheet,{defval:''});
  if(data.length&&Object.hasOwn(data[0],'NMLS Field')&&Object.hasOwn(data[0],'Amount')){
   sectionOrder={};rows=data.map((r,i)=>({id:i+1,code:String(r['NMLS Field']).trim(),label:String(r.Description||r['NMLS Field']),cents:amount(r.Amount),section:fields[String(r['NMLS Field']).trim()]?.[1]||'',include:true,source:$('sheet').value+' row '+(i+2)}));
@@ -165,12 +165,12 @@ $('file').onchange=async()=>{
  const file=$('file').files[0];if(!file)return;if(file.size>40*1024*1024){status('Please upload a file under 40 MB.');return;}
  setBusy(true);resetReview();sectionOrder={};rows=[];controls={};table();workbook=null;fileName=file.name;$('bsPage').innerHTML='<option value="all">All pages (automatic)</option>';status('Reading '+file.name+'…');
  try{
-  if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);$('bsPage').innerHTML=pageOptions(rawLines,escape).html;showAmountColumns(rawLines);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
+  if(/\.pdf$/i.test(file.name)){rawLines=await pdfLines(file);$('bsPage').innerHTML=pageOptions(rawLines,escape,tidyLabel).html;showAmountColumns(rawLines);importPdfLines();$('sheet').innerHTML='<option>PDF document</option>';}
   else if(/\.(xlsx|xls|csv)$/i.test(file.name)){workbook=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false,raw:/\.csv$/i.test(file.name)});$('sheet').innerHTML=workbook.SheetNames.map(s=>`<option>${escape(s)}</option>`).join('');const match=workbook.SheetNames.find(s=>isBalanceSheetName(s));if(match)$('sheet').value=match;excelLines();}
   else throw Error('Choose PDF, XLSX, XLS, or CSV.');
-  if(!$('company').value){const first=rawLines.find(l=>l.text.trim());if(first&&!/assets|balance sheet/i.test(first.text)&&first.text.length<130)$('company').value=first.text.trim();}
-  status(`${rows.filter(r=>r.include).length} detail lines extracted from ${file.name}. Review every extracted line.`);
- }catch(e){status('Unable to import: '+e.message+'. You can paste text or add lines manually.');}
+  if(!$('company').value){const first=rawLines.find(l=>l.text.trim());if(first&&!/assets|balance sheet/i.test(first.text)&&first.text.length<130)$('company').value=tidyLabel(first.text.trim());}
+  status(`${plural(rows.filter(r=>r.include).length,'detail line')} extracted from ${file.name}. Review every extracted line.`);
+ }catch(e){status('Unable to import: '+String(e.message).replace(/\.$/,'')+'. You can paste text or add lines manually.');}
  finally{setBusy(false);showImportChoices();}
 };
 table();
