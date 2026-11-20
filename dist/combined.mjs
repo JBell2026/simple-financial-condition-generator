@@ -1,4 +1,4 @@
-import {readScheduleWorkbook,dReviewRows} from './schedule-d.mjs';
+import {readScheduleWorkbook,dReviewRows,incomeSplit} from './schedule-d.mjs';
 import {calculatedReview,orderedReview} from './calculated.mjs';
 import {guide,sourceLink,definitionIssues,definitionWarnings} from './fv7.mjs';
 import {amount,rounded,fields,reconcile,exportXml,scheduleOFields} from './engine.mjs';
@@ -25,14 +25,15 @@ export function readSfc(book,options={}){
  const override=value(overrideAddress);const gross=override!==null?override:value(grossAddress,true);
  const interest=value(interestAddress)||0,net=value(netAddress,true),expenses=categoryTotals.reduce((a,b)=>a+b,0);
  const incomeField=options.incomeField||'C210';if(!['C210','C220','C230','C240','C770'].includes(incomeField))throw Error('Select a supported income field.');
- groups[incomeField]=gross-interest;groups.C060=interest;
+ const split=incomeSplit(options.incomeSplit,incomeField,gross-interest,issues);
+ groups[incomeField]=gross-interest-split.cents;if(split.field)groups[split.field]=split.cents;groups.C060=interest;
  groups.D310=expenses;groups.D510=net;
  const originalDifference=gross-expenses-net;
  if(originalDifference!==0)issues.push('SFC gross income less expenses differs from net income by $'+(originalDifference/100).toFixed(2)+'. Correct the completed worksheet.');
  const categoryRounded=Object.entries(groups).filter(([c])=>columnCodes.includes(c)||c===options.payrollField).reduce((sum,[,v])=>sum+rounded(v),0);
  const roundingExpenseDifference=categoryRounded-rounded(expenses);
  const roundingNetDifference=rounded(gross)-rounded(expenses)-rounded(net);
- const roundingGrossDifference=rounded(gross-interest)+rounded(interest)-rounded(gross);
+ const roundingGrossDifference=rounded(gross-interest-split.cents)+rounded(split.cents)+rounded(interest)-rounded(gross);
  if(roundingExpenseDifference)issues.push('SFC expense fields have a whole-dollar rounding difference of $'+roundingExpenseDifference+'.');
  if(roundingNetDifference)issues.push('SFC whole-dollar income / expense / net income difference is $'+roundingNetDifference+'.');
  if(roundingGrossDifference)issues.push('SFC gross income fields have a whole-dollar rounding difference of $'+roundingGrossDifference+'.');
@@ -66,7 +67,7 @@ export function mountCombined(getMeta,getBalance,getSchedule){
  const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let reviewed=null;
  function reset(){reviewed=null;$('combinedConfirm').checked=false;$('combinedXml').disabled=true;$('combinedPreview').innerHTML='';$('combinedStatus').textContent='';}
  $('fcInputSource').addEventListener('change',()=>{$('completedSfcPanel').hidden=$('fcInputSource').value!=='excel';reset();});
- ['fcInputSource','completedSfc','payrollField','incomeField','company','nmls','date','xmlPeriod','reportYear'].forEach(id=>$(id).addEventListener('change',reset));
+ ['fcInputSource','completedSfc','payrollField','incomeField','incomeField2','splitRevenue','incomeSplitAmount','company','nmls','date','xmlPeriod','reportYear'].forEach(id=>$(id).addEventListener('change',reset));
  ['company','nmls','date'].forEach(id=>$(id).addEventListener('input',reset));
  document.addEventListener('financialDataChanged',reset);
  let payrollPreviewSequence=0;
@@ -76,7 +77,7 @@ export function mountCombined(getMeta,getBalance,getSchedule){
  $('reviewCombined').onclick=async()=>{
   reset();const sf=$('completedSfc').files[0],meta=getMeta();const direct=$('fcInputSource').value==='app';if(!direct&&!sf){$('combinedStatus').textContent='Upload the completed workbook first.';return;}if(!meta.company||!meta.date){$('combinedStatus').textContent='Enter the company name and select the reporting year and period in Client & reporting details.';return;}if(sf&&sf.size>40*1024*1024){$('combinedStatus').textContent='Choose files under 40 MB.';return;}
   $('reviewCombined').disabled=true;try{
-   const sfc=direct?getSchedule():readSfc(XLSX.read(await sf.arrayBuffer(),{type:'array'}),{payrollField:$('payrollField').value,incomeField:$('incomeField').value});const balance=getBalance();reviewed=combineReports(balance,sfc,meta);
+   const sfc=direct?getSchedule():readSfc(XLSX.read(await sf.arrayBuffer(),{type:'array'}),{payrollField:$('payrollField').value,incomeField:$('incomeField').value,incomeSplit:$('splitRevenue').checked?{field:$('incomeField2').value,cents:amount($('incomeSplitAmount').value)}:null});const balance=getBalance();reviewed=combineReports(balance,sfc,meta);
    reviewed.metadata=JSON.stringify(meta);
    const headers='<table><thead><tr><th>NMLS field</th><th>Original amount</th><th>XML amount</th></tr></thead><tbody>';
    $('combinedPreview').innerHTML='<p>'+esc(definitionWarnings(balance.groups).join(' '))+'</p><p>Gross income source: '+esc(sfc.grossSource)+'</p>'+headers+Object.entries(reviewed.result.groups).filter(([c])=>!fields[c]).sort().map(([c,v])=>'<tr><td>'+c+'<br><small>'+esc(guide(c))+' <a href="'+sourceLink(c)+'" target="_blank" rel="noopener">FV7</a></small></td><td>$'+(v/100).toFixed(2)+'</td><td>'+rounded(v)+'</td></tr>').join('')+'</tbody></table>';

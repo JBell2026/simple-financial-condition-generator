@@ -60,6 +60,15 @@ export function extractPLFigures(lines){
  else{if(result.gross===undefined&&revenueCount)result.gross=revenueSum;if(result.gross!==undefined&&otherIncomeTotal!==undefined)result.gross+=otherIncomeTotal;}
  return result;
 }
+export const incomeFields=['C210','C220','C230','C240','C770'];
+export function incomeSplit(split,incomeField,nonInterest,issues=[]){
+ if(!split||(!split.field&&(split.cents===undefined||split.cents===null||split.cents===0)))return {field:'',cents:0};
+ if(!incomeFields.includes(split.field)){issues.push('Choose the second revenue field for the split.');return {field:'',cents:0};}
+ if(split.field===incomeField){issues.push('Choose two different revenue fields for the split.');return {field:'',cents:0};}
+ if(!Number.isSafeInteger(split.cents)){issues.push('Enter the amount of revenue that goes to '+split.field+'.');return {field:'',cents:0};}
+ if(split.cents<=0||split.cents>=nonInterest){issues.push('The revenue split amount must be more than zero and less than total non-interest revenue.');return {field:'',cents:0};}
+ return {field:split.field,cents:split.cents};
+}
 export function buildScheduleD(rows,options={}){
  const active=rows.filter(r=>r.include!==false),groups={},issues=[],warnings=[];
  if(!active.length)issues.push('Add or import expense lines for Schedule D.');if(active.length>75)issues.push('Include no more than 75 expense lines.');
@@ -70,8 +79,11 @@ export function buildScheduleD(rows,options={}){
  const gross=options.gross,interest=options.interest===undefined?0:options.interest,reportedNet=options.reportedNet;
  if(!Number.isSafeInteger(gross))issues.push('Enter total gross income, before expenses.');if(!Number.isSafeInteger(interest))issues.push('Enter a valid interest income amount.');if(!Number.isSafeInteger(reportedNet))issues.push('Enter the P&L final net income or loss.');
  const incomeField=options.incomeField||'C210';if(!['C210','C220','C230','C240','C770'].includes(incomeField))issues.push('Choose a supported income field.');
- groups[incomeField]=(gross||0)-(interest||0);groups.C060=interest||0;
- const values={...groups,C800:gross||0},whole=Object.fromEntries(Object.entries(groups).map(([c,v])=>[c,rounded(v)]));whole.C800=rounded(groups[incomeField])+rounded(groups.C060);
+ // Non-interest revenue goes to one income field, or is split between two: the split
+ // amount goes to the second field and the remainder stays in the first.
+ const split=incomeSplit(options.incomeSplit,incomeField,(gross||0)-(interest||0),issues);
+ groups[incomeField]=(gross||0)-(interest||0)-split.cents;if(split.field)groups[split.field]=split.cents;groups.C060=interest||0;
+ const values={...groups,C800:gross||0},whole=Object.fromEntries(Object.entries(groups).map(([c,v])=>[c,rounded(v)]));whole.C800=rounded(groups[incomeField])+(split.field?rounded(split.cents):0)+rounded(groups.C060);
  const present=Object.fromEntries(Object.keys(groups).map(c=>[c,true]));present.C800=Number.isSafeInteger(gross);
  const calculated=defs.map(def=>{present[def.code]=def.deps.some(c=>present[c.replace(/^-/,'')]);const sum=data=>def.deps.reduce((s,c)=>s+(c[0]==='-'?-1:1)*(data[c.replace(/^-/,'')]||0),0);values[def.code]=sum(values);whole[def.code]=sum(whole);return {...def,hasInformation:!!present[def.code],cents:values[def.code],whole:whole[def.code],formula:def.deps.map((c,i)=>c.startsWith('-')?'− '+c.slice(1):(i?'+ ':'')+c).join(' ')};});
  const expenses=values.D310,net=values.D600;
@@ -89,7 +101,7 @@ export function buildScheduleD(rows,options={}){
 }
 export function addScheduleWorkbook(wb,rows,report,meta){
  const data=wb.addWorksheet('Schedule D Lines');data.columns=[{width:16},{width:46},{width:20},{width:65},{width:12}];data.addRow(['NMLS field','Description','Amount','Source','Include']);for(const r of rows)data.addRow([r.field,r.label,r.cents/100,r.source,r.include===false?'No':'Yes']);data.getColumn(3).numFmt='#,##0.00;(#,##0.00)';data.views=[{state:'frozen',ySplit:1}];data.getRow(1).font={bold:true};
- const setup=wb.addWorksheet('Schedule D Setup');setup.addRows([['Version','Simple Schedule D v1'],['Company',meta.company],['NMLS ID',meta.nmls],['As of',meta.date],['Gross income',Number.isSafeInteger(report.options.gross)?report.gross/100:''],['Other interest income',report.interest/100],['P&L final net income',Number.isSafeInteger(report.options.reportedNet)?report.reportedNet/100:''],['Non-interest income field',report.options.incomeField||'C210'],['Gross expense control total',Number.isSafeInteger(report.options.sourceExpenses)?report.options.sourceExpenses/100:''],['Instructions','Edit Schedule D Lines and Setup for Schedule D. SFC worksheet is a category reference; changes there do not replace field allocations. A numeric B36/B43 gross override, including an explicit zero, still applies; leave it blank to use the Setup or L26/L33 gross income.']]);setup.columns=[{width:32},{width:110}];
+ const setup=wb.addWorksheet('Schedule D Setup');setup.addRows([['Version','Simple Schedule D v1'],['Company',meta.company],['NMLS ID',meta.nmls],['As of',meta.date],['Gross income',Number.isSafeInteger(report.options.gross)?report.gross/100:''],['Other interest income',report.interest/100],['P&L final net income',Number.isSafeInteger(report.options.reportedNet)?report.reportedNet/100:''],['Non-interest income field',report.options.incomeField||'C210'],['Gross expense control total',Number.isSafeInteger(report.options.sourceExpenses)?report.options.sourceExpenses/100:''],['Second income field (optional split)',report.options.incomeSplit?.field||''],['Amount to second income field',report.options.incomeSplit?.field?report.options.incomeSplit.cents/100:''],['Instructions','Edit Schedule D Lines and Setup for Schedule D. SFC worksheet is a category reference; changes there do not replace field allocations. A numeric B36/B43 gross override, including an explicit zero, still applies; leave it blank to use the Setup or L26/L33 gross income.']]);setup.columns=[{width:32},{width:110}];
  const review=wb.addWorksheet('Schedule D Review');review.columns=[{width:15},{width:48},{width:20},{width:22},{width:65}];review.addRow(['Field','Description','Original dollars','NMLS whole dollars','Calculation']);
  review.addRow(['C800','Total gross income',{formula:"'Schedule D Setup'!B5",result:report.gross/100},{formula:'ROUND(C2,0)',result:rounded(report.gross)},'Schedule D Setup']);
  const entries=dReviewRows(report),lookup={C800:2};entries.forEach((r,i)=>lookup[r.code]=i+3);
@@ -106,7 +118,7 @@ export function readScheduleWorkbook(book){
  if(Object.entries(sheet).some(([key,cell])=>/^[A-E](\d+)$/.test(key)&&Number(key.match(/\d+/)[0])>1000&&cell?.v!==undefined&&cell.v!==''))throw Error('Schedule D Lines exceeds 999 worksheet rows.');
  let gross=val(setup.B5),reportedNet=val(setup.B7),grossSource='Schedule D Setup!B5';
  for(const [name,s]of Object.entries(book.Sheets)){const map=Object.entries(s).find(([key,c])=>/^A\d+$/.test(key)&&String(c.v).trim().toUpperCase()==='D050');if(map){const shift=Number(map[0].slice(1))-22,address='B'+(36+shift),override=val(s[address],false,false);if(override!==null){gross=override;grossSource=name+'!'+address;}else if(gross===null){gross=val(s['L'+(26+shift)]);grossSource=name+'!L'+(26+shift);}if(reportedNet===null)reportedNet=val(s['L'+(28+shift)]);break;}}
- return buildScheduleD(rows,{gross,interest:val(setup.B6)||0,reportedNet,incomeField:String(setup.B8?.v||'C210'),sourceExpenses:val(setup.B9),grossSource,meta:{company:setup.B2?.v,nmls:setup.B3?.v,date:setup.B4?.v}});
+ return buildScheduleD(rows,{gross,interest:val(setup.B6)||0,reportedNet,incomeField:String(setup.B8?.v||'C210'),incomeSplit:incomeFields.includes(String(setup.B10?.v||'').trim().toUpperCase())?{field:String(setup.B10.v).trim().toUpperCase(),cents:val(setup.B11)}:null,sourceExpenses:val(setup.B9),grossSource,meta:{company:setup.B2?.v,nmls:setup.B3?.v,date:setup.B4?.v}});
 }
 
 export function dReviewRows(report){const input=Object.entries(report.groups).filter(([c])=>dFieldMap[c]).map(([code,cents])=>({code,label:dFieldMap[code].label,cents,whole:rounded(cents)}));const rows=[...input,...report.calculated.filter(r=>r.hasInformation)];const order='C100 C110 C120 C130 C140 C150 C160 D010 D020 D030 D040 D050 D060 D070 D080 D090 D100 D110 D120 D129 D130 D150 D160 D170 D180 D200 D210 D220 D230 D240 D250 D260 D270 D280 D290 D300 D400 D410 D420 D430 D440 D310 D510 D520 D530 D540 D550 D560 D600'.split(' ');return rows.sort((a,b)=>order.indexOf(a.code)-order.indexOf(b.code));}

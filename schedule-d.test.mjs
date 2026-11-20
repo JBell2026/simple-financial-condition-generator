@@ -35,6 +35,15 @@ delete book.Sheets.Reference.B43;assert.equal(readScheduleWorkbook(book).gross,5
 const balance=reconcile([{code:'A010',section:'Assets',cents:100000,include:true,label:'Cash'},{code:'B280',section:'Equity',cents:100000,include:true,label:'Equity'}]);const combined=combineReports(balance,report,{company:'Test',date:'2026-09-30',period:'MCRQ3'});assert(combined.xml.includes('<D520_1>20</D520_1>'));assert(combined.xml.includes('<D510_1>290</D510_1>'));assert(!combined.xml.includes('<D600_1>'));fs.writeFileSync('/tmp/schedule-d-test.xml',combined.xml);
 console.log('Schedule D classifications, splits, taxes, adjustments, rounding blocks, canonical/legacy Excel, metadata and combined XML tests passed.');
 
+// Revenue split between two income fields: the split amount goes to the second field.
+{const splitReport=buildScheduleD(rows,{...options,incomeSplit:{field:'C230',cents:20000}});assert.deepEqual(splitReport.issues,[]);assert.equal(splitReport.groups.C210,29500);assert.equal(splitReport.groups.C230,20000);assert.equal(splitReport.groups.C060,500);assert.equal(splitReport.net,27500);
+ const xml=combineReports(balance,splitReport,{company:'Test',date:'2026-09-30',period:'MCRQ3'}).xml;assert(xml.includes('<C210_1>295</C210_1>')&&xml.includes('<C230_1>200</C230_1>'));fs.writeFileSync('/tmp/split-test.xml',xml);
+ assert(buildScheduleD(rows,{...options,incomeSplit:{field:'C210',cents:20000}}).issues.some(s=>s.includes('two different')));
+ assert(buildScheduleD(rows,{...options,incomeSplit:{field:'C230',cents:49500}}).issues.some(s=>s.includes('less than total')));
+ assert(buildScheduleD(rows,{...options,incomeSplit:{field:'C230',cents:null}}).issues.some(s=>s.includes('Enter the amount')));
+ assert.deepEqual(buildScheduleD(rows,{...options,incomeSplit:null}).groups,report.groups);
+ const wb2=new ExcelJS.Workbook();addScheduleWorkbook(wb2,rows,splitReport,options.meta);const back=readScheduleWorkbook(XLSX.read(await wb2.xlsx.writeBuffer(),{type:'buffer'}));assert.deepEqual(back.issues,[]);assert.equal(back.groups.C230,20000);assert.equal(back.groups.C210,29500);
+ const legacy={Sheets:{SFC:{A3:{v:100},A22:{v:'D050'},L26:{v:500},L28:{v:400}}}};const l=readSfc(legacy,{incomeField:'C210',incomeSplit:{field:'C770',cents:12500}});assert.deepEqual(l.issues,[]);assert.equal(l.groups.C210,37500);assert.equal(l.groups.C770,12500);}
 const {extractPLFigures}=await import('./dist/schedule-d.mjs');
 assert.deepEqual(extractPLFigures([
  'Statement of Revenues and Expenses','Net Revenues $1000.00','Other Income $25.00',

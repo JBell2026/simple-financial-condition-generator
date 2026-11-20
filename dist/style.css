@@ -145,3 +145,6 @@ label.include-line input{width:auto;margin:0}
 #review table.bs-review #rows tr[data-id]>td{vertical-align:top!important;padding-top:8px!important;padding-bottom:6px!important}
 #review table.bs-review .move-cell{height:36px;margin-top:8px}
 #review table.bs-review .row-actions button{line-height:36px}
+.split-revenue{grid-template-columns:1.4fr 1fr;align-items:end;margin-top:8px}
+.split-revenue input,.split-revenue select{height:48px;margin:8px 0 0}
+@media(max-width:800px){.split-revenue{grid-template-columns:1fr}}

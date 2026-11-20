@@ -35,7 +35,7 @@ Serve `dist/` with any static server for browser checks (`python3 -m http.server
 ## Product rules that are easy to break
 
 - **Gross income override:** in SFC workbooks a valid numeric B36 (B43 in expanded, seven-row-shifted templates) overrides gross income, **including an explicit zero**. Blank or non-numeric falls back to L26/L33 (or Schedule D Setup B5 in the newer workbook). Both readers (`readSfc`, `readScheduleWorkbook`) must agree.
-- Non-interest income sent to NMLS = total gross income − other interest income (C060). The Section 4 preview shows source and amount.
+- Non-interest income sent to NMLS = total gross income − other interest income (C060). The Section 4 preview shows source and amount. It goes to one income field, or is split between two (`incomeSplit`: the entered amount goes to the second field, the remainder stays in the first); the split is saved in Schedule D Setup B10/B11.
 - **The importer must stay general.** `format-corpus.test.mjs` runs synthetic QuickBooks Online, QuickBooks Desktop, Xero, CPA-prepared and comparative statements (`fixtures/statement-layouts.mjs`) through the import path; each must foot and reconcile. Add a synthetic layout there whenever a client statement exposes a new format. Do not add client-specific special cases.
 - A balance sheet account with no recognized NMLS field is kept in the review as unclassified (it blocks export until classified). Never drop a detail line. Group headings ("Credit Cards", "Long-Term Liabilities") supply a suggestion when the account name does not.
 - Statements with several amount columns: per page, dated column headers select the latest period, otherwise the rightmost (Total) column. The Amount column control overrides this for the balance sheet.
