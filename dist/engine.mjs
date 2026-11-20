@@ -169,7 +169,7 @@ function currentAssetBreakdown(supplements, expected){
  return candidates.length===1?candidates[0]:null;
 }
 export function parseLines(lines,{supplements=[]}={}){
- let section='',active=true,cashCode='',otherAssets=false,group='';const rows=[],controls={},notes=[];let skipped=0;
+ let section='',active=true,cashCode='',otherAssets=false,group='',fixedStart=0;const rows=[],controls={},notes=[];let skipped=0;
  for(let i=0;i<lines.length;i++){
   let {text,source}=typeof lines[i]==='string'?{text:lines[i],source:'Line '+(i+1)}:lines[i];
   text=text.trim(); if(!text)continue;
@@ -190,7 +190,7 @@ export function parseLines(lines,{supplements=[]}={}){
   if(!label||!section)continue;
   if(matches.length>1){notes.push(source+': multiple amounts. Choose the amount column before importing.');continue;}
   const cents=amount(first[0]);if(cents===null)continue;
-  const total=/^(total\b|net (?:assets|other assets|fixed assets)\b)/i.test(label);
+  const total=/^(total\b|net (?:assets|other assets|fixed assets|property)\b)/i.test(label);
   if(total){
    if(/^total assets$/i.test(label))controls.assets=cents;
    if(/^total liabilities$/i.test(label))controls.liabilities=cents;
@@ -199,13 +199,14 @@ export function parseLines(lines,{supplements=[]}={}){
    if(/^total liabilities (and|&) (?:(?:members?|owners?|stockholders?|shareholders?)[’'s\s]*)?equity$/i.test(label)){controls.combined=cents;active=false;section='';}
   }
   if(total&&/^total\s+(?:restricted |unrestricted )?cash\s*(?:and|&)\s*(?:cash\s+)?equivalents/i.test(label)){const c=cashCode||(/restricted/i.test(label)&&!/unrestricted/i.test(label)?'A020':'A010');controls[c]=cents;cashCode='';}
-  const fixedTotal=section==='Assets'&&/^total\s+fixed\s+assets$/i.test(label);
-  if(fixedTotal){
-   for(let j=rows.length-1;j>=0;j--){
-    if(rows[j].fixedTotal)break;
-    if(rows[j].code==='A180')rows[j].include=false;
-   }
-  }
+  // Fixed assets keep the statement's own breakdown (cost lines and accumulated
+  // depreciation). Their total or net line is a control, not a second amount. When a
+  // statement shows only the net line, that line is the amount.
+  const fixedLine=section==='Assets'&&/^(?:total|net)\s+(?:fixed\s+assets|property(?:,\s*plant,?)?\s*(?:and|&)\s*equipment)(?:,?\s*net)?$/i.test(label);
+  const fixedDetail=fixedLine?rows.slice(fixedStart).filter(r=>r.code==='A180'&&r.include):[];
+  if(fixedLine&&fixedDetail.length){for(const r of fixedDetail)r.fixedDetail=true;controls.fixedAssets=(controls.fixedAssets||0)+cents;}
+  const fixedTotal=fixedLine&&!fixedDetail.length;
+  if(fixedLine)fixedStart=rows.length;
   const contraOtherAsset=otherAssets&&/^accumulated amorti[sz]ation$/i.test(label);
   let code=fixedTotal?'A180':total?'':contraOtherAsset?'A230H':cashCode||suggest(label,section),basis=code?'account name':'';
   if(!total&&!code){code=suggestFromHeading(group,section);if(code)basis='group heading “'+group+'”';}
@@ -224,6 +225,7 @@ export function parseLines(lines,{supplements=[]}={}){
  const grouped=new Map();
  for(const row of rows.filter(r=>r.include&&r.code)){
   const previous=grouped.get(row.code);
+  if(row.code==='A180'){grouped.set('A180:'+row.id,{...row});continue;}
   if(previous){previous.cents+=row.cents;previous.label=fields[row.code][0];previous.source+='; '+row.source;}
   else grouped.set(row.code,{...row});
  }
@@ -246,6 +248,7 @@ export function reconcile(rows,controls={}){
   const actual=currentCodes.reduce((sum,code)=>sum+(groups[code]||0),0);
   if(actual!==controls.currentLiabilities)sourceDiff('Source current liabilities subtotal differs',actual-controls.currentLiabilities);
  }
+ if(controls.fixedAssets!==undefined){const detail=selected.filter(r=>r.fixedDetail&&Number.isSafeInteger(r.cents)).reduce((t,r)=>t+r.cents,0);if(detail!==controls.fixedAssets)sourceDiff('Source net fixed assets differs',detail-controls.fixedAssets);}
  for(const c of ['A010','A020'])if(controls[c]!==undefined&&(groups[c]||0)!==controls[c])sourceDiff('Source '+c+' cash subtotal differs',(groups[c]||0)-controls[c]);
  const difference=totals.Assets-totals.Liabilities-totals.Equity;
  if(difference!==0)issues.push('Balance sheet difference: '+(difference/100).toFixed(2));

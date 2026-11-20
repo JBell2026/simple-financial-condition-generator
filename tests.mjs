@@ -14,11 +14,15 @@ const invalid=reconcile([{include:true,label:'Bad',section:'Assets',code:'',cent
 const wrongSection=reconcile([{include:true,label:'Bad',section:'Assets',code:'B280',cents:0}]);assert(wrongSection.issues.some(s=>s.includes('classification')));
 console.log('Parser, P&L exclusion, source controls, negative values, rounding and invalid input checks passed.');
 const mapped=parseLines(['Assets','Equipment $200.00','Accumulated Depreciation $-50.00','Total Fixed Assets $150.00','Checking $10.00','Savings $20.00','Unmapped account $40.00']);
-assert.equal(mapped.rows.find(r=>r.code==='A180').cents,15000);
+// Fixed assets keep the statement's breakdown; the total line is a control.
+{const fixed=mapped.rows.filter(r=>r.code==='A180');assert.deepEqual(fixed.map(r=>[r.label,r.cents]),[['Equipment',20000],['Accumulated Depreciation',-5000]]);assert.equal(mapped.controls.fixedAssets,15000);assert.equal(reconcile(mapped.rows.filter(r=>r.code),mapped.controls).groups.A180,15000);
+ const zero=parseLines(['Balance Sheet','Assets','Checking $100.00','Fixed Assets','Property and Equipment $29,000.00','Accumulated Depreciation ($29,000.00)','Net Fixed Assets $0.00','Total Assets $100.00','Equity','Retained Earnings $100.00']);assert.deepEqual(zero.rows.filter(r=>r.code==='A180').map(r=>r.cents),[2900000,-2900000]);const zr=reconcile(zero.rows,zero.controls);assert.deepEqual(zr.issues,[]);assert.equal(zr.groups.A180,0);
+ const wrong=parseLines(['Assets','Equipment $200.00','Accumulated Depreciation $-50.00','Total Fixed Assets $175.00']);assert(reconcile(wrong.rows,wrong.controls).issues.some(s=>s.includes('net fixed assets')));
+ const only=parseLines(['Assets','Net fixed assets $120.00']);assert.deepEqual(only.rows.map(r=>[r.code,r.cents]),[['A180',12000]]);assert.equal(only.controls.fixedAssets,undefined);}
 assert.equal(mapped.rows.find(r=>r.code==='A010').cents,3000);
 // An unrecognized account stays in the review, unclassified, instead of being dropped.
-assert.equal(mapped.rows.length,3);const unmapped=mapped.rows.find(r=>r.label==='Unmapped account');assert.equal(unmapped.code,'');assert.equal(unmapped.include,true);assert.equal(unmapped.cents,4000);assert(reconcile(mapped.rows).issues.some(s=>s.includes('Review the NMLS classification: Unmapped account')));
-assert.equal(mapped.rows.find(r=>r.code==='A180').label,'Total Fixed Assets');
+assert.equal(mapped.rows.length,4);const unmapped=mapped.rows.find(r=>r.label==='Unmapped account');assert.equal(unmapped.code,'');assert.equal(unmapped.include,true);assert.equal(unmapped.cents,4000);assert(reconcile(mapped.rows).issues.some(s=>s.includes('Review the NMLS classification: Unmapped account')));
+
 const equity=parseLines(['Equity','Retained Earnings $100.00','Net Income $26,995.82','Net Profit $4.18']);
 assert.equal(equity.rows.find(r=>r.code==='B280').cents,10000);
 assert.equal(equity.rows.find(r=>r.code==='B300').cents,2700000);

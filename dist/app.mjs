@@ -40,8 +40,12 @@ function table(){
  const renderRow=r=>`<tr data-section="${r.section}" data-layout-key="${rowKey(r)}" data-id="${r.id}" class="input-row${r.code?'':' unclassified'}${r.include?'':' excluded'}"><td class="move-cell">${moveControls(r)}<input aria-label="Include ${escape(r.label)}" title="Include this line" type="checkbox" data-key="include" ${r.include?'checked':''}></td><td><input aria-label="Description" data-key="label" value="${escape(r.label)}"><details class="row-detail"><summary aria-label="Source for ${escape(r.label)}">Source</summary><div>${escape(r.source)}<label class="section-move">Section<select aria-label="Section" data-key="section">${['Assets','Liabilities','Equity'].map(s=>`<option ${r.section===s?'selected':''}>${s}</option>`).join('')}</select></label></div></details></td><td><select aria-label="NMLS field" data-key="code"><option value="">Choose a field…</option>${Object.entries(fields).filter(([k,f])=>f[1]===r.section).sort(([a],[b])=>filingCompare({code:a},{code:b})).map(([k,f])=>`<option value="${k}" ${k===r.code?'selected':''}>${k} - ${escape(f[0])}</option>`).join('')}</select></td><td><input aria-label="Amount in dollars" data-key="cents" inputmode="decimal" value="${r.cents===null?'':(r.cents/100).toFixed(2)}"></td><td class="row-actions"><button type="button" aria-label="Remove row" title="Remove line" data-remove="${r.id}">×</button></td></tr>`;
  const renderCalc=r=>'<tr data-layout-key="'+rowKey(r)+'" class="calculated-row'+(sectionTotals.includes(r.code)?' section-total':'')+'" title="'+escape(r.code+' = '+r.deps.join(' + '))+'"><td></td><td>'+escape(r.label)+'</td><td>'+r.code+' <small>calculated</small></td><td data-calc="'+r.code+'"></td><td></td></tr>';
  // With subtotals hidden, each section lists its accounts and ends with its totals.
- const layout=section=>{const items=sectionLayout(section);return subtotals?items:[...items.filter(r=>!r.deps),...items.filter(r=>r.deps)];};
- $('rows').innerHTML=['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="5" scope="rowgroup">'+section+' <span>Schedule '+(section==='Assets'?'A':'B')+'</span></th></tr>'+layout(section).map(r=>r.deps?renderCalc(r):renderRow(r)).join('')).join('');
+ // A field fed by several statement lines (for example fixed asset cost and accumulated
+ // depreciation) gets a net line after its last account, showing what NMLS receives.
+ const withNets=items=>{const counts={};for(const r of items)if(!r.deps&&r.include&&r.code)counts[r.code]=(counts[r.code]||0)+1;const last={};items.forEach((r,i)=>{if(!r.deps&&r.include&&counts[r.code]>1)last[r.code]=i;});return items.flatMap((r,i)=>last[r.code]===i&&!r.deps?[r,{net:r.code}]:[r]);};
+ const renderNet=code=>'<tr class="calculated-row field-net"><td></td><td>Net '+escape(fields[code][0].replace(/,?\s*net$/i,'').toLowerCase())+'</td><td>'+code+' <small>sent to NMLS</small></td><td data-net="'+code+'"></td><td></td></tr>';
+ const layout=section=>{const items=sectionLayout(section);return withNets(subtotals?items:[...items.filter(r=>!r.deps),...items.filter(r=>r.deps)]);};
+ $('rows').innerHTML=['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="5" scope="rowgroup">'+section+' <span>Schedule '+(section==='Assets'?'A':'B')+'</span></th></tr>'+layout(section).map(r=>r.net?renderNet(r.net):r.deps?renderCalc(r):renderRow(r)).join('')).join('');
  $('empty').hidden=rows.length>0;$('restoreOrder').hidden=!Object.keys(sectionOrder).length;checks();
 }
 $('showSubtotals').onchange=table;
@@ -49,6 +53,7 @@ function checks(){
  const r=reconcile(rows,controls);
  const calculated=calculatedReview(r.groups);
  for(const row of calculated)document.querySelectorAll('[data-calc="'+row.code+'"]').forEach(el=>{el.closest('tr').hidden=!row.hasInformation||(!$('showSubtotals').checked&&!sectionTotals.includes(row.code));el.innerHTML=money(row.cents)+(row.whole*100!==row.cents?'<br><small>NMLS: '+money(row.whole*100)+'</small>':'');});
+ document.querySelectorAll('[data-net]').forEach(el=>{const c=r.groups[el.dataset.net]||0;el.innerHTML=money(c)+(rounded(c)*100!==c?'<br><small>NMLS: '+money(rounded(c)*100)+'</small>':'');});
  $('assetTotal').textContent=money(r.totals.Assets);$('liabilityTotal').textContent=money(r.totals.Liabilities);$('equityTotal').textContent=money(r.totals.Equity);$('difference').textContent=money(r.difference);
  const unclassified=rows.filter(x=>x.include&&!x.code).length;
  const needsExplanation=requiresOtherAssetsExplanation(r.groups);$('otherAssetsBox').hidden=!needsExplanation&&!$('otherAssetsExplanation').value.trim();
@@ -61,6 +66,7 @@ function checks(){
  return r;
 }
 function updateRow(e){const tr=e.target.closest('tr'),r=rows.find(r=>r.id===Number(tr?.dataset.id));if(!r)return;const k=e.target.dataset.key;if(!k)return;r[k]=k==='include'?e.target.checked:k==='cents'?amount(e.target.value):e.target.value;resetReview();if(k==='section'){r.code='';table();}else if(k==='code'||k==='include')table();else checks();}
+// Editing an amount keeps focus in the field; net lines refresh through checks().
 $('rows').addEventListener('change',updateRow);
 $('rows').addEventListener('input',e=>{if(e.target.tagName==='INPUT'&&e.target.type!=='checkbox')updateRow(e);});
 $('rows').addEventListener('click',e=>{const button=e.target.closest('button');if(e.target.dataset.remove){rows=rows.filter(r=>r.id!==Number(e.target.dataset.remove));resetReview();table();}});
@@ -170,7 +176,7 @@ $('xmlPeriod').addEventListener('change',updateReportingDate);
 $('reportYear').addEventListener('input',updateReportingDate);
 updateReportingDate();
 
-const allocator=mountAllocator({getBalance:()=>({...reconcile(rows,controls),sources:Object.fromEntries(rows.filter(r=>r.include).map(r=>[r.code,r.source]))}),readPdf:pdfLines,getSource:()=>({lines:selectAmounts(rawLines),name:fileName}),getMeta:()=>({company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}),onChange:resetReview});
+const allocator=mountAllocator({getBalance:()=>({...reconcile(rows,controls),sources:rows.filter(r=>r.include).reduce((m,r)=>{m[r.code]=m[r.code]?m[r.code]+'; '+r.source:r.source;return m;},{})}),readPdf:pdfLines,getSource:()=>({lines:selectAmounts(rawLines),name:fileName}),getMeta:()=>({company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}),onChange:resetReview});
 
 $('otherAssetsExplanation').addEventListener('input',()=>{resetReview();checks();});
 mountCombined(()=>({otherAssetsExplanation:$('otherAssetsExplanation').value.trim(),company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value,period:$('xmlPeriod').value}),()=>{const result=checks();if(!result.count)throw Error('Review and include the balance sheet accounts in the Schedules A & B review first.');return {...result,meta:{company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}};},()=>allocator.getReport());
