@@ -175,3 +175,14 @@ label.include-line input{width:auto;margin:0}
 .check-status.off{background:#985448;color:#F7F4EC}
 .check-status.wait{background:#F7F4EC;color:#42505A;border:1px solid #B3C2CA}
 .fix-button{margin:8px 0 0!important;display:block}
+.reconcile.category-totals{max-width:860px}
+.reconcile.category-totals td:first-child{width:34px;font-weight:700}
+.reconcile.category-totals td:nth-child(3){width:60px;text-align:center}
+.reconcile.category-totals td:nth-child(4){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;width:130px}
+.reconcile.category-totals td:last-child{text-align:left;white-space:normal}
+.reconcile.category-totals th:nth-child(4){text-align:right}.reconcile.category-totals th:last-child{text-align:left}
+.reconcile.category-totals tr.empty td{opacity:.5}
+.reconcile.category-totals tr.sub-row td{background:#F7F4EC;font-size:13px}
+#categoryBox h3{font-family:Spartan,sans-serif;font-size:22px;margin:22px 0 4px}
+.payroll-split{max-width:560px;margin:10px 0}
+.expense-actions{white-space:nowrap}.expense-actions .secondary{padding:6px 10px;font-size:12px;margin:0 6px 0 0}

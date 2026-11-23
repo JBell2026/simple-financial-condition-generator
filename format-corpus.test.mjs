@@ -69,3 +69,9 @@ console.log('Whole-dollar rounding passed.');
  assert.deepEqual(parseLines(eq).rows.map(r=>r.code),parseLines(eq,{entity:''}).rows.map(r=>r.code));
  assert.deepEqual(equityFields,{corporation:['B250','B260','B270','B280','B290','B300','B310','B240'],llc:['B340']});}
 console.log('Business type equity mapping passed.');
+// Categories map to one NMLS line each; income taxes have their own category.
+{const {categoryField,classifyExpense,isLoanOfficerPay,categories}=await import('./dist/expenses.mjs');
+ assert.deepEqual(categoryField,{A:'D050',C:'D150',D:'D160',E:'D200',F:'D210',G:'D220',H:'D230',I:'D280',J:'C150',K:'D520'});assert.deepEqual(categories.map(([c])=>c).join(''),'ABCDEFGHIJK');
+ assert.equal(classifyExpense('Provision for income taxes'),'K');assert.equal(classifyExpense('Income Tax Expense'),'K');assert.equal(classifyExpense('Payroll taxes'),'C');assert.equal(classifyExpense('Property tax'),'E');assert.equal(classifyExpense('Loan officer commissions'),'B');
+ assert(isLoanOfficerPay('Loan officer signing bonuses'));assert(isLoanOfficerPay('MLO compensation'));assert(!isLoanOfficerPay('Salaries and wages'));}
+console.log('Category to NMLS line mapping passed.');
