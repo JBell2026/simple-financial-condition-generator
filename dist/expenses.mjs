@@ -178,5 +178,8 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
    const bytes=await wb.xlsx.writeBuffer(),url=URL.createObjectURL(new Blob([bytes],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));const a=document.createElement('a');a.href=url;a.download=meta.company.replace(/[^a-z0-9]+/gi,'-')+'-SFC-Worksheet.xlsx';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);message('SFC worksheet downloaded.');
   }catch(e){message('Unable to export: '+e.message);}finally{setBusy(false);}
  };
- render();return {getReport};
+ // Net income from every included line, assigned to a field or not: the same figure the
+ // “Does this P&L add up?” check shows. Null until gross income and expenses are in.
+ function getNet(){const list=expenseSummary(rows).active.filter(r=>Number.isSafeInteger(r.cents)),gross=amount($('scheduleGross').value);if(!Number.isSafeInteger(gross)||!list.length)return null;const adj=['D520','D540','D560'],sum=l=>l.reduce((t,r)=>t+r.cents,0);return gross-sum(list.filter(r=>!adj.includes(r.field)))-sum(list.filter(r=>r.field==='D520'))+sum(list.filter(r=>r.field==='D540'||r.field==='D560'));}
+ render();return {getReport,getNet};
 }
