@@ -181,5 +181,10 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
  // Net income from every included line, assigned to a field or not: the same figure the
  // “Does this P&L add up?” check shows. Null until gross income and expenses are in.
  function getNet(){const list=expenseSummary(rows).active.filter(r=>Number.isSafeInteger(r.cents)),gross=amount($('scheduleGross').value);if(!Number.isSafeInteger(gross)||!list.length)return null;const adj=['D520','D540','D560'],sum=l=>l.reduce((t,r)=>t+r.cents,0);return gross-sum(list.filter(r=>!adj.includes(r.field)))-sum(list.filter(r=>r.field==='D520'))+sum(list.filter(r=>r.field==='D540'||r.field==='D560'));}
- render();return {getReport,getNet};
+ // For the rounding checks card: the included expense lines, the income figures, and a way
+ // to move one line by a few dollars when the user clicks a recommendation.
+ const getLines=()=>expenseSummary(rows).active.filter(r=>Number.isSafeInteger(r.cents)).map(r=>({id:r.id,label:r.label,cents:r.cents,field:r.field||'',category:r.category}));
+ const getFigures=()=>({gross:amount($('scheduleGross').value),reportedNet:amount($('scheduleNet').value)});
+ function adjustLine(id,delta){const r=rows.find(x=>x.id===id);if(!r||!Number.isSafeInteger(delta))return;r.cents+=delta;onChange();render();}
+ render();return {getReport,getNet,getLines,getFigures,adjustLine};
 }

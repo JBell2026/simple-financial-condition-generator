@@ -218,6 +218,42 @@ function renderRollforward(){
   +'</tbody></table>';
 }
 $('beginEquity').addEventListener('input',renderRollforward);
+// Rounding checks: the three ties NMLS flags when whole-dollar amounts are a dollar or two
+// off. Each shows both sides, whether they tie, and which line to move by how much. The
+// change is made only when the user clicks the button.
+const ROUNDING_LIMIT=1000; // differences above $10 are not rounding
+let roundingFixes=[];
+function renderRoundingChecks(){
+ roundingFixes=[];const out=[],r=reconcile(rows,controls);let lines=[],figures={},report=null;try{lines=allocator.getLines();figures=allocator.getFigures();report=allocator.getReport();}catch{}
+ const tick=ok=>'<span class="check-status '+(ok?'ok':'off')+'">'+(ok?'Ties':'Does not tie')+'</span>',dollars=d=>money(Math.abs(d)),fixButton=(label,apply)=>{roundingFixes.push(apply);return ' <button type="button" class="secondary fix-button" data-fix="'+(roundingFixes.length-1)+'">'+label+'</button>';};
+ const block=(title,formula,status,body)=>'<div class="rounding-check"><h3>'+title+'</h3><p class="formula">'+formula+'</p>'+status+(body?'<p>'+body+'</p>':'')+'</div>';
+ const pending=text=>'<span class="check-status wait">'+text+'</span>';
+ // 1. D310 = C160 + D180 + D300 + D440
+ if(!lines.length)out.push(block('1. Total expenses','D310 = C160 + D180 + D300 + D440',pending('Waiting for the expense list'),''));
+ else{const part=c=>report.calculated.find(x=>x.code===c)?.cents||0,parts=['C160','D180','D300','D440'].map(part),sum=parts.reduce((a,b)=>a+b,0),adj=['D520','D540','D560'],all=lines.filter(l=>!adj.includes(l.field)).reduce((t,l)=>t+l.cents,0),unassigned=lines.filter(l=>!l.field);
+  out.push(block('1. Total expenses','D310 = C160 + D180 + D300 + D440<br>'+escape(money(all)+' = '+parts.map(money).join(' + ')+' ('+money(sum)+')'),tick(all===sum),all===sum?'':unassigned.length?plural(unassigned.length,'expense line')+' totalling '+escape(money(unassigned.reduce((t,l)=>t+l.cents,0)))+' '+(unassigned.length===1?'has':'have')+' no NMLS field yet: '+escape(unassigned.map(l=>l.label).join(', '))+'. Assign '+(unassigned.length===1?'it':'them')+' in the Schedules C &amp; D review and this will tie.':'The expense list and the NMLS subtotals differ by '+escape(dollars(all-sum))+'. Check the field on each expense line.'));}
+ // 2. D510 = C800 − D310, against the P&L's net income
+ const net=(()=>{try{return allocator.getNet();}catch{return null;}})();
+ if(net===null||!Number.isSafeInteger(figures.reportedNet))out.push(block('2. Net income','D510 = C800 − D310, and it must match the P&amp;L’s net income',pending('Waiting for income, expenses and the P&amp;L’s net income'),''));
+ else{const diff=net-figures.reportedNet,adj=['D520','D540','D560'],pool=lines.filter(l=>!adj.includes(l.field)&&l.cents>Math.abs(diff)),target=([pool.filter(l=>l.field==='D280'),pool.filter(l=>l.category==='I'),pool].find(g=>g.length)||[]).sort((a,b)=>b.cents-a.cents)[0];
+  let body='';if(diff&&Math.abs(diff)<=ROUNDING_LIMIT&&target)body='Recommendation: '+(diff>0?'add ':'take ')+escape(dollars(diff))+(diff>0?' to “':' off “')+escape(target.label)+'” ('+escape(money(target.cents))+(target.field?', '+target.field:'')+'), making it '+escape(money(target.cents+diff))+'. '+(target.field==='D280'?'It is an Other expenses line, the usual place for a rounding dollar.':'There is no Other expenses (D280) line, so this is the largest suitable line.')+fixButton('Make this change',()=>allocator.adjustLine(target.id,diff));
+  else if(diff)body='The difference is '+escape(dollars(diff))+', which is too large to be rounding. Look for an expense that is missing, counted twice or misread.';
+  out.push(block('2. Net income','D510 = C800 − D310, and it must match the P&amp;L’s net income<br>'+escape(money(figures.gross)+' − '+money(figures.gross-net)+' = '+money(net)+'; the P&L shows '+money(figures.reportedNet)),tick(diff===0),body));}
+ // 3. A240 = B220 + B350
+ if(!r.count)out.push(block('3. Balance sheet','A240 = B220 + B350',pending('Waiting for the balance sheet'),''));
+ else{const d=r.difference,t=r.totals,included=rows.filter(x=>x.include&&Number.isSafeInteger(x.cents));let body='';
+  if(d&&Math.abs(d)<=ROUNDING_LIMIT){
+   // The section whose lines no longer add to the statement's own printed total is where the dollar drifted.
+   const drift={Assets:controls.assets===undefined?null:t.Assets-controls.assets,Liabilities:controls.liabilities===undefined?null:t.Liabilities-controls.liabilities,Equity:controls.equity===undefined?null:t.Equity-controls.equity};
+   const section=drift.Assets===d?'Assets':drift.Liabilities===-d?'Liabilities':drift.Equity===-d?'Equity':'Equity',pointed=drift[section]===(section==='Assets'?d:-d),delta=section==='Assets'?-d:d;
+   const prefer={Assets:['A230H'],Liabilities:['B120','B100'],Equity:['B280','B340']}[section],pool=included.filter(x=>x.section===section&&Math.abs(x.cents)>Math.abs(d)),target=([pool.filter(x=>prefer.includes(x.code)),pool].find(g=>g.length)||[]).sort((a,b)=>Math.abs(b.cents)-Math.abs(a.cents))[0];
+   if(target)body='Recommendation: '+(delta>0?'add ':'take ')+escape(dollars(delta))+(delta>0?' to “':' off “')+escape(target.label)+'” ('+escape(money(target.cents))+(target.code?', '+target.code:'')+'), making it '+escape(money(target.cents+delta))+'. '+(pointed?section+' no longer add up to the total printed on the statement, so the rounding dollar is in that section.':'The statement’s printed totals do not point to one section, so this uses the main equity line.')+fixButton('Make this change',()=>{target.cents+=delta;resetReview();table();});
+  }else if(d)body='The difference is '+escape(dollars(d))+', which is too large to be rounding. Look for an account that is missing, unticked or in the wrong section.';
+  out.push(block('3. Balance sheet','A240 = B220 + B350<br>'+escape(money(t.Assets)+' = '+money(t.Liabilities)+' + '+money(t.Equity)+' ('+money(t.Liabilities+t.Equity)+')'),tick(d===0),body));}
+ $('roundingList').innerHTML=out.join('');
+}
+$('roundingList').addEventListener('click',e=>{const i=e.target.dataset?.fix;if(i!==undefined&&roundingFixes[Number(i)]){roundingFixes[Number(i)]();setTimeout(renderRoundingChecks,0);}});
+document.addEventListener('financialDataChanged',()=>setTimeout(renderRoundingChecks,0));
 document.addEventListener('financialDataChanged',()=>setTimeout(renderRollforward,0));
 $('otherAssetsExplanation').addEventListener('input',()=>{explanationEdited=true;resetReview();checks();});
 $('otherAssetsReset').onclick=()=>{explanationEdited=false;resetReview();checks();};
@@ -225,3 +261,4 @@ mountCombined(()=>({otherAssetsExplanation:$('otherAssetsExplanation').value.tri
 
 $('expenseGuidance').innerHTML='<ul>'+['C210','C220','C230','C240','C770','D010','D020','D030','D040','D050','D060','D110','D150','D160','D200','D210','D220','D230','D280','C150','D310','D510'].map(c=>'<li><a target="_blank" rel="noopener" href="'+sourceLink(c)+'">'+c+'</a> — '+escape(guide(c))+'</li>').join('')+'</ul>';
 renderRollforward();
+renderRoundingChecks();

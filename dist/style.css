@@ -166,3 +166,12 @@ label.include-line input{width:auto;margin:0}
 .reconcile.breakdown tr.group-row th{background:#B3C2CA;color:#20354D;text-align:left;font-weight:700;padding:6px 10px}
 #scheduleCBox h3{font-family:Spartan,sans-serif;font-size:22px;margin:22px 0 4px}
 #scheduleCBox>p{margin:0 0 8px;max-width:760px}
+.rounding-check{border:1px solid #B3C2CA;border-radius:8px;padding:14px 16px;margin:12px 0;max-width:820px}
+.rounding-check h3{font-family:Spartan,sans-serif;font-size:19px;margin:0 0 4px}
+.rounding-check .formula{font-variant-numeric:tabular-nums;margin:0 0 8px;font-weight:600}
+.rounding-check p{margin:8px 0 0}
+.check-status{display:inline-block;border-radius:999px;padding:3px 12px;font-size:12px;font-weight:700}
+.check-status.ok{background:#B3C2CA;color:#20354D}
+.check-status.off{background:#985448;color:#F7F4EC}
+.check-status.wait{background:#F7F4EC;color:#42505A;border:1px solid #B3C2CA}
+.fix-button{margin:8px 0 0!important;display:block}
