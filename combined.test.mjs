@@ -18,4 +18,9 @@ const result=combineReports(balance,s,{company:'Test',date:'2026-09-30',period:'
 const oSection=result.xml.match(/<ScheduleOSection>([\s\S]*?)<\/ScheduleOSection>/)[1],oTags=[...oSection.matchAll(/<(O\d{3}_1)>(-?\d+)<\/\1>/g)];assert.equal(oTags.length,22);assert(oTags.every(m=>m[2]==='0'));assert(oSection.includes('<O010_1>0</O010_1>')&&oSection.includes('<O370_1>0</O370_1>')&&oSection.includes('<O384_1>0</O384_1>'));
 assert.throws(()=>exportXml({...balance,groups:{...balance.groups,D260:500}},{company:'Test',date:'2026-09-30',period:'MCRQ3'}),/Schedule O/);fs.writeFileSync('/tmp/combined-test.xml',result.xml);
 assert.equal(combineReports({...balance,meta:{company:'Wrong'}},s,{company:'Test',date:'2026-09-30',period:'MCRQ3'}).xml,null);
+// Equity rollforward lines are written when supplied, and required once the app asks for them.
+{const meta={company:'Test',date:'2026-09-30',period:'MCRQ3'};
+ const withRf=combineReports(balance,s,{...meta,rollforward:{begin:4000,net:10000,adjust:-4000}});assert.deepEqual(withRf.issues,[]);assert(withRf.xml.includes('<B350A_1>40</B350A_1>')&&withRf.xml.includes('<B350B_1>100</B350B_1>')&&withRf.xml.includes('<B350N_1>-40</B350N_1>'));assert(/<ScheduleBSection>[\s\S]*B350A_1[\s\S]*<\/ScheduleBSection>/.test(withRf.xml));fs.writeFileSync('/tmp/rollforward-test.xml',withRf.xml);
+ const missing=combineReports(balance,s,{...meta,rollforward:{begin:null,net:10000,adjust:null}});assert.equal(missing.xml,null);assert(missing.issues.some(i=>i.includes('beginning of the period')));
+ assert(!combineReports(balance,s,meta).xml.includes('B350A_1'));}
 console.log('Combined SFC mapping, original/expanded layouts, gross-income override (zero, nonzero, blank, invalid, expanded) and fallback, payroll review, client matching, zero Schedule O and XML checks passed.');

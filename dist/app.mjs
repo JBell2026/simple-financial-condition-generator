@@ -235,10 +235,10 @@ function renderRollforward(){
   +row('B350A','Balance at beginning of period',begin,begin===null?'Type it in the box above. It is the Total Equity (B350) from the prior period’s filing.':'The amount you typed above. It should equal Total Equity (B350) on the prior period’s filing.')
   +row('B350B','Net income / (loss)',net,net===null?'Comes from the Schedules C &amp; D section once income and expenses are in. NMLS requires it to equal D600.':'Net income from the Schedules C &amp; D section above. NMLS requires it to equal D600.')
   +row('B350N','Equity adjustments',adjust,adjust===null?'Worked out once the beginning balance, net income and the balance sheet’s equity are all in.':'Ending equity minus the beginning balance minus net income: '+escape(signed(ending)+' − '+signed(begin)+' − '+signed(net))+'. This covers every change in equity that is not net income, such as money the owners put in or took out.')
-  +row('B350T','Balance at end of period',ending,ending===null?'Total equity from the balance sheet review above.':'Total equity from the balance sheet review above. NMLS adds this up itself and checks that it equals Total Equity (B350).','calculated-row')
+  +row('B350T','Balance at end of period',ending,ending===null?'Total equity from the balance sheet review.':'Total equity from the balance sheet review above. NMLS adds this up itself and checks that it equals Total Equity (B350).','calculated-row')
   +'</tbody></table>';
 }
-$('beginEquity').addEventListener('input',renderRollforward);
+$('beginEquity').addEventListener('input',()=>{renderRollforward();resetReview();});
 // Rounding checks: the three ties NMLS flags when whole-dollar amounts are a dollar or two
 // off. Each shows both sides, whether they tie, and which line to move by how much. The
 // change is made only when the user clicks the button.
@@ -278,7 +278,7 @@ document.addEventListener('financialDataChanged',()=>setTimeout(renderRoundingCh
 document.addEventListener('financialDataChanged',()=>setTimeout(renderRollforward,0));
 $('otherAssetsExplanation').addEventListener('input',()=>{explanationEdited=true;resetReview();checks();});
 $('otherAssetsReset').onclick=()=>{explanationEdited=false;resetReview();checks();};
-mountCombined(()=>({otherAssetsExplanation:$('otherAssetsExplanation').value.trim(),company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value,period:$('xmlPeriod').value}),()=>{const result=checks();if(!result.count)throw Error('Review and include the balance sheet accounts in the Schedules A & B review first.');return {...result,meta:{company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}};},()=>allocator.getReport());
+mountCombined(()=>({rollforward:(renderRollforward(),{begin:lastRollforward.begin,net:lastRollforward.net,adjust:lastRollforward.adjust}),otherAssetsExplanation:$('otherAssetsExplanation').value.trim(),company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value,period:$('xmlPeriod').value}),()=>{const result=checks();if(!result.count)throw Error('Review and include the balance sheet accounts in the Schedules A & B review first.');return {...result,meta:{company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value}};},()=>allocator.getReport());
 
 $('expenseGuidance').innerHTML='<ul>'+['C210','C220','C230','C240','C770','D010','D020','D030','D040','D050','D060','D110','D150','D160','D200','D210','D220','D230','D280','C150','D310','D510'].map(c=>'<li><a target="_blank" rel="noopener" href="'+sourceLink(c)+'">'+c+'</a> — '+escape(guide(c))+'</li>').join('')+'</ul>';
 renderRollforward();

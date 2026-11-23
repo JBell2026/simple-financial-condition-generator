@@ -83,6 +83,9 @@ export function exportXml(result,meta){
   if(['PositiveDollar','Count'].includes(type)&&n<0)throw Error(code+' cannot be negative.');
   sections[section].push(`      <${tag}>${n}</${tag}>`);
  }
+ // Equity rollforward (Schedule B-350R): beginning balance, net income and equity
+ // adjustments are sent when they have been worked out. NMLS calculates the ending balance.
+ if(meta.rollforward){const rf=meta.rollforward;for(const [tag,value] of [['B350A_1',rf.begin],['B350B_1',rf.net],['B350N_1',rf.adjust]]){if(!Number.isSafeInteger(value))throw Error('Enter the equity at the beginning of the period in step 4 so the equity rollforward can be included.');sections.ScheduleBSection.push(`      <${tag}>${rounded(value)}</${tag}>`);}}
  // Schedule O (loan loss reserves and related activity) is always reported, with every
  // field the schema accepts set to zero, so NMLS shows it as completed rather than blank.
  if(result.groups.D260||result.groups.D270)throw Error('Schedule O is reported with all zeros, but '+(result.groups.D260?'D260':'D270')+' has an amount that NMLS requires to match Schedule O. Remove that amount or complete Schedule O in NMLS.');
