@@ -59,7 +59,8 @@ function table(){
  $('rows').innerHTML=['Assets','Liabilities','Equity'].map(section=>'<tr class="section-divider '+section.toLowerCase()+'"><th colspan="5" scope="rowgroup">'+section+' <span>Schedule '+(section==='Assets'?'A':'B')+'</span></th></tr>'+layout(section).map(r=>r.net?renderNet(r.net,r.contra):r.deps?renderCalc(r):renderRow(r)).join('')).join('');
  $('empty').hidden=rows.length>0;$('restoreOrder').hidden=!Object.keys(sectionOrder).length;checks();
 }
-$('showSubtotals').onchange=table;
+// NMLS subtotal lines show by default; the button removes them or brings them back.
+$('toggleSubtotals').onclick=()=>{const box=$('showSubtotals');box.checked=!box.checked;$('toggleSubtotals').textContent=box.checked?'Remove NMLS subtotal lines':'Show NMLS subtotal lines';table();};
 let explanationEdited=false;
 function otherAssetTitles(list){
  const titles=[];for(const r of list){if(!r.include||r.code!=='A230H')continue;const title=String(r.label||'').replace(/%/g,' percent').replace(/[<>]/g,'').replace(/\s+/g,' ').trim();if(title&&!titles.some(t=>t.toLowerCase()===title.toLowerCase()))titles.push(title);}
