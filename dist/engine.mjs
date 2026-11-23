@@ -222,7 +222,7 @@ export function parseLines(lines,{supplements=[],entity=''}={}){
    otherAssets=section==='Assets'&&/^other assets$/i.test(heading);group=heading;
    if(/^(total\s+)?assets$/i.test(heading))section='Assets';
    else if(/^(current |long.term |other current )?liabilities(?: (?:and|&) equity)?$/i.test(heading))section='Liabilities';
-   else if(/^(?:(?:members?|owners?|stockholders?|shareholders?)[’'s\s]*)?equity$/i.test(heading))section='Equity';
+   else if(/^(?:(?:members?|owners?|stockholders?|shareholders?|partners?)[’'s\s]*)?(?:equity|capital)$|^(?:net assets\s+)?represented by$|^capital (?:and|&) reserves$|^net assets$/i.test(heading))section='Equity';
    continue;
   }
   const first=matches[0],label=text.slice(0,first.index).trim().replace(/\s+/g,' ').replace(accountNumber,'').replace(/^[·•\-–—]\s*/,'');const shown=tidyLabel(label);
@@ -238,6 +238,10 @@ export function parseLines(lines,{supplements=[],entity=''}={}){
    if(/^total liabilities$/i.test(label))controls.liabilities=cents;
    if(/^total current liabilities$/i.test(label))controls.currentLiabilities=cents;
    if(/^total (?:(?:members?|owners?|stockholders?|shareholders?)[’'s\s]*)?equity$/i.test(label))controls.equity=cents;
+   // "Net assets" is assets less liabilities, which is the equity total. A bare "Total"
+   // closing the equity section is the same control.
+   if(/^net assets$/i.test(label)&&section!=='Assets'){if(controls.equity===undefined)controls.equity=cents;section='Equity';}
+   if(/^total$/i.test(label)&&section==='Equity'&&controls.equity===undefined)controls.equity=cents;
    if(/^total liabilities (and|&) (?:(?:members?|owners?|stockholders?|shareholders?)[’'s\s]*)?equity$/i.test(label)){controls.combined=cents;active=false;section='';}
   }
   if(total&&/^total\s+(?:restricted |unrestricted )?cash\s*(?:and|&)\s*(?:cash\s+)?equivalents/i.test(label)){const c=cashCode||(/restricted/i.test(label)&&!/unrestricted/i.test(label)?'A020':'A010');controls[c]=cents;cashCode='';}

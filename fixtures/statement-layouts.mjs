@@ -301,5 +301,61 @@ Total operating expenses  3,000  9,500  7,500  20,000
 Adjusted EBITDA  (3,000)  2,500  10,500  10,000
 Less: start-up and launch costs  10,000  5,000  5,000  20,000
 Less: amortization  -  -  1,000  1,000
-Net loss (GAAP)  (13,000)  (2,500)  4,500  (11,000)`,expect:{assets:9000000,net:-1100000,expenses:11100000,gross:10000000}}
+Net loss (GAAP)  (13,000)  (2,500)  4,500  (11,000)`,expect:{assets:9000000,net:-1100000,expenses:11100000,gross:10000000}},
+// Spreadsheet-prepared statements: equity shown as "Net Assets represented by", a bare
+// closing "Total", income lines named after people, and "Net income for the period".
+netassets:{bs:`EPSILON HOME LOANS LLC
+FINANCIAL STATEMENTS
+FOR 3RD QUARTER 2026
+All Amounts in "US$"
+\fBalance Sheet
+As of 30 September 2026  All Amounts in "US$"
+  2026
+Assets
+Non-current assets
+Furniture & equipment  9,000.00
+Computer equipment  4,000.00
+Less: Accumulated depreciation  (3,000.00)
+Total non-current assets  10,000.00
+Current assets
+Cash in hand  40,000.00
+Cash at bank  25,000.00
+Total current assets  65,000.00
+Total assets  75,000.00
+Liabilities
+Non-current liabilities
+Notes payable  -
+Less: Current portion of long-term debt  -
+Total non-current liabilities  -
+Current liabilities
+Accounts payable  5,000.00
+Business credit cards  -
+Total current liabilities  5,000.00
+Total liabilities  5,000.00
+Net Assets  70,000.00
+Net Assets represented by:
+Capital stock/Partner's equity  10,000.00
+Opening retained earnings  45,000.00
+Dividends paid/Owner's draw  -
+Net income for the period  15,000.00
+Total  70,000.00
+Balance Sheet  Page 1 of 2`,
+pl:`Statement of Profit or Loss
+For the Period 1 July 2026 to 30 September 2026  All Amounts in "US$"
+  2026
+Income
+Sales  4,000.00
+J. Sample  36,000.00
+Total income  40,000.00
+Expenses
+Advertising & marketing  3,000.00
+Insurance expense  2,000.00
+Contract labor  6,000.00
+Software & apps  5,000.00
+Rent  8,000.00
+Depreciation on fixed assets  1,000.00
+Taxes paid  -
+Total expenses  25,000.00
+Net income for the period  15,000.00
+Statement of Profit or Loss  Page 2 of 2`,expect:{assets:7500000,net:1500000,expenses:2500000,gross:4000000}}
 };

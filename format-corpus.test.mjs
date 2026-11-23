@@ -23,6 +23,7 @@ for(const [name,c] of Object.entries(corpus)){
  const report=buildScheduleD(ex.map(r=>({...r,field:suggestD(r.label,r.category)||'D060'})),{gross:fig.gross,interest:fig.interest||0,reportedNet:fig.reportedNet});
  assert.equal(report.net,c.expect.net,name+': D600 equals net income');
  // Without cost of revenue the gap is exactly the tracked cost-of-revenue total.
+ if(name==='netassets'){assert.equal(rec.totals.Equity,7000000,'net assets: equity section read');assert.equal(parsed.controls.equity,7000000);assert.equal(parsed.rows.filter(r=>r.section==='Equity').length,3);}
  const without=parseExpenses(all,false);assert.equal(expenseSummary(ex).total-expenseSummary(without).total,without.costOfRevenue.total,name+': cost of revenue tracked');
 }
 // The second presentation in the management package is reported, not imported.

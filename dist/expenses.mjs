@@ -1,4 +1,4 @@
-import {dFields,dFieldMap,suggestD,splitExpense,extractPLFigures,buildScheduleD,addScheduleWorkbook,dReviewRows} from './schedule-d.mjs';
+import {dFields,dFieldMap,suggestD,splitExpense,extractPLFigures,isNetIncomeLabel,buildScheduleD,addScheduleWorkbook,dReviewRows} from './schedule-d.mjs';
 import {addBalanceReview} from './calculated.mjs';
 import {amount as exactAmount,moneyMatches,selectTotalAmountLine,selectAmountsByPage,tidyLabel,plural,wholeCents,usd,looksLikeDate} from './engine.mjs';
 import {recall,rememberExpense,rememberSetting,memoryKey} from './client-memory.mjs';
@@ -54,13 +54,13 @@ export function parseExpenses(lines,includeCogs=false){
   // The first complete income statement ends at its net income line. A later
   // presentation of the same period (management or non-GAAP view) is not imported again.
   if(finished){if(cents!==null&&label&&!/^(?:total|subtotal|net)\b/i.test(label))repeated++;continue;}
-  if(/^net\s+(?:income|profit|loss|earnings)(?:\s*\(loss\))?$/i.test(label)&&cents!==null&&(out.length||costOfRevenue.count)){finishCogs();active=false;finished=true;continue;}
+  if(isNetIncomeLabel(label)&&cents!==null&&(out.length||costOfRevenue.count)){finishCogs();active=false;finished=true;continue;}
   if(/^(?:(?:total|net)\s+)?(?:net\s+(?:income|profit|loss|earnings)|operating\s+(?:income|profit|loss)|other\s+income|earnings\s+before|ebitda)/i.test(label)){finishCogs();active=false;inRevenue=/^other\s+income/i.test(label);continue;}
   // A heading such as "General Expenses" that carries its own amount inside an expense
   // section is an expense line, not a new heading.
   const expenseHeading=/^(?:(?:ordinary|operating|other|administrative|business|general(?:\s*(?:and|&)\s*administrative)?)\s+)?expenses?(?:\s*\([^)]*\))?$/i.test(label);
   if((expenseHeading&&!(cents&&(active||/^other\s/i.test(label))&&!/^(?:operating\s+)?expenses?$/i.test(label)))||/^(?:expense|expenses)\s*[-:]?\s*(?:amount|total)$/i.test(label)){finishCogs();active=true;inRevenue=false;continue;}
-  if(/^(?:total\s+)?(?:(?:trading|operating|ordinary|gross)\s+)?(?:income|revenues?|sales)(?:\s+income)?$/i.test(label)){finishCogs();active=false;inRevenue=cents===null;continue;}
+  if(/^(?:total\s+)?(?:(?:trading|operating|ordinary|gross)\s+)?(?:income|revenues?|sales)(?:\s+income)?$/i.test(label)){finishCogs();active=false;inRevenue=cents===null?true:/^total\b/i.test(label)?false:inRevenue;continue;} // a line named "Sales" with an amount is a revenue line, not the end of the section
   if(/\brevenues?\b/i.test(label))continue;
   if(cogs){if(label&&cents&&!/^(?:total|subtotal)\b/i.test(label)){cogsCount++;costLine(label,cents,source+' | Original P&L line: '+raw);}continue;}
   const standaloneAdjustment=/^(?:interest expenses?|(?:provision for |total )?income tax(?:es)?(?: expense| provision)?|provision for (?:income )?taxes|extraordinary items?|noncontrolling interest)$/i.test(label)&&cents!==null;

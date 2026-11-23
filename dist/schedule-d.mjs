@@ -32,6 +32,9 @@ export function splitExpense(rows,id,part,field){
  const next={...original,id:Math.max(0,...rows.map(r=>r.id))+1,cents:part,field,category:dFieldMap[field].category,source:original.source+' / split',label:original.label+' (split)'};
  original.cents-=part;rows.splice(rows.indexOf(original)+1,0,next);return next;
 }
+// The statement's final net income line, however it is worded: "Net income", "Net profit/(loss)",
+// "Net income for the period", "Profit for the year", "Net income after tax".
+export const isNetIncomeLabel=label=>{const tail='(?:\\s*\\/?\\s*\\(?(?:loss|income|profit)\\)?)?',period='\\s+(?:for|during)\\s+the\\s+(?:period|year|quarter|months?)(?:\\s+(?:ended|ending)\\b.*)?';return new RegExp('^net\\s+(?:income|profit|loss|earnings)'+tail+'(?:'+period+'|\\s+after\\s+(?:income\\s+)?tax(?:es|ation)?)?$|^(?:income|profit|loss|earnings)'+tail+period+'$','i').test(String(label).trim());};
 export function extractPLFigures(lines){
  const result={};let revenue,otherIncome,otherIncomeTotal,inOtherIncome=false,revenueExpenseStatement=false,inRevenue=false,revenueSum=0,revenueCount=0,finished=false;
  for(const line of lines){
@@ -44,12 +47,12 @@ export function extractPLFigures(lines){
   const ms=moneyMatches(text);if(!ms.length)continue;
   const label=text.slice(0,ms[0].index).trim(),value=amount(ms[0][0]);if(value===null)continue;
   if(inRevenue){if(/^(?:total|gross|net)\b/i.test(label))inRevenue=false;else if(label){revenueSum+=value;revenueCount++;}}
-  if(/^net\s+(?:income|profit|loss|earnings)(?:\s*\(loss\))?$/i.test(label))finished=true;
+  if(isNetIncomeLabel(label))finished=true;
   if(/^total\s+(?:(?:trading|operating|ordinary|gross)\s+)?(?:revenues?|income|sales)$|^gross income$/i.test(label)&&result.gross===undefined)result.gross=value;
   // Other income reported below operating income is part of total gross income (C800).
   if(/^total\s+other\s+income$/i.test(label)&&otherIncomeTotal===undefined)otherIncomeTotal=value;
   if(/^(?:bank\s+)?interest\s+(?:income|earned)$/i.test(label)&&result.interest===undefined)result.interest=value;
-  if(/^net\s+(?:income(?:\s*\(loss\))?|profit|loss)$/i.test(label)&&result.reportedNet===undefined)result.reportedNet=/^net loss$/i.test(label)&&value>0?-value:value;
+  if(isNetIncomeLabel(label)&&result.reportedNet===undefined)result.reportedNet=/^(?:net\s+)?loss\b/i.test(label)&&value>0?-value:value;
   if(!revenueExpenseStatement)continue;
   if(/^net revenues?$/i.test(label)&&revenue===undefined)revenue=value;
   if(/^other income$/i.test(label)&&otherIncome===undefined)otherIncome=value;
