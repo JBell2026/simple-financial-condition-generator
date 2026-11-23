@@ -238,3 +238,6 @@ main[data-current] section[hidden]{display:none!important}
 .reconcile.sheet-table td:nth-child(3){white-space:normal;overflow-wrap:anywhere}
 .subtotal-toggle{display:flex;align-items:center;gap:12px;margin:10px 0 6px;flex-wrap:wrap}
 .subtotal-toggle .secondary{margin:0}
+.download-hint{margin:8px 0 0;font-weight:600}
+.download-hint.locked{color:#985448}.download-hint.ready{color:#20354D}
+#combinedStatus ul{margin:6px 0 0 18px;padding:0}

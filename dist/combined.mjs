@@ -65,7 +65,9 @@ export function combineReports(balance,sfc,meta){
 }
 export function mountCombined(getMeta,getBalance,getSchedule){
  const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let reviewed=null;
- function reset(){reviewed=null;$('combinedConfirm').checked=false;$('combinedXml').disabled=true;$('combinedPreview').innerHTML='';$('combinedStatus').textContent='';}
+ // The line beside the download button always says what, if anything, is holding it back.
+ function hint(blocked=''){const el=$('downloadHint');if(!el)return;el.textContent=blocked?'Locked: '+blocked:!reviewed?'Locked: click “Review combined figures” first. The download unlocks when the review passes.':!reviewed.xml?'Locked: fix the items listed above, then review again.':!$('combinedConfirm').checked?'Locked: tick the box above to confirm you reviewed the figures.':'Ready to download.';el.className='download-hint '+(reviewed?.xml&&$('combinedConfirm').checked?'ready':'locked');}
+ function reset(){reviewed=null;$('combinedConfirm').checked=false;$('combinedXml').disabled=true;$('combinedPreview').innerHTML='';$('combinedStatus').textContent='';hint();}
  $('fcInputSource').addEventListener('change',()=>{$('completedSfcPanel').hidden=$('fcInputSource').value!=='excel';reset();});
  ['fcInputSource','completedSfc','payrollField','incomeField','incomeField2','splitRevenue','incomeSplitAmount','company','nmls','date','xmlPeriod','reportYear'].forEach(id=>$(id).addEventListener('change',reset));
  ['company','nmls','date'].forEach(id=>$(id).addEventListener('input',reset));
@@ -73,10 +75,10 @@ export function mountCombined(getMeta,getBalance,getSchedule){
  let payrollPreviewSequence=0;
  async function payrollPreview(){const sequence=++payrollPreviewSequence,file=$('completedSfc').files[0];if(!file){$('payrollAmountPreview').textContent='Upload a completed workbook to see its payroll total.';return;}if(file.size>40*1024*1024){$('payrollAmountPreview').textContent='Choose a workbook under 40 MB.';return;}try{const report=readSfc(XLSX.read(await file.arrayBuffer(),{type:'array'}),{payrollField:$('payrollField').value,incomeField:$('incomeField').value});if(sequence!==payrollPreviewSequence)return;const legacy=Number.isSafeInteger(report.payrollTotal);$('payrollField').disabled=!legacy;$('payrollAmountPreview').textContent=legacy?'Payroll amount from this workbook: '+new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(report.payrollTotal/100)+'. '+(report.payrollTotal===0?'No payroll amount will be sent.':$('payrollField').value?'Destination: '+$('payrollField').selectedOptions[0].textContent:'Choose a staff role below.'):'This workbook already has individual NMLS field assignments. No payroll-total selection is needed.';}catch(e){if(sequence===payrollPreviewSequence)$('payrollAmountPreview').textContent='Cannot read the payroll amount: '+e.message;}}
  ['completedSfc','payrollField'].forEach(id=>$(id).addEventListener('change',payrollPreview));
- $('combinedConfirm').onchange=()=>{$('combinedXml').disabled=!reviewed?.xml||!$('combinedConfirm').checked;};
+ $('combinedConfirm').onchange=()=>{$('combinedXml').disabled=!reviewed?.xml||!$('combinedConfirm').checked;hint();};
  $('reviewCombined').onclick=async()=>{
-  reset();const sf=$('completedSfc').files[0],meta=getMeta();const direct=$('fcInputSource').value==='app';if(!direct&&!sf){$('combinedStatus').textContent='Upload the completed workbook first.';return;}if(!meta.company||!meta.date){$('combinedStatus').textContent='Enter the company name and select the reporting year and period in Client & reporting details.';return;}if(sf&&sf.size>40*1024*1024){$('combinedStatus').textContent='Choose files under 40 MB.';return;}
-  $('reviewCombined').disabled=true;try{
+  reset();const sf=$('completedSfc').files[0],meta=getMeta();const direct=$('fcInputSource').value==='app';if(!direct&&!sf){$('combinedStatus').textContent='Upload the completed workbook first.';hint('upload the completed workbook first.');return;}if(!meta.company||!meta.date){$('combinedStatus').textContent='Enter the company name and select the reporting year and period in step 1, Client.';hint('finish step 1, Client, first.');return;}if(sf&&sf.size>40*1024*1024){$('combinedStatus').textContent='Choose files under 40 MB.';return;}
+  let failed=false;$('reviewCombined').disabled=true;try{
    const sfc=direct?getSchedule():readSfc(XLSX.read(await sf.arrayBuffer(),{type:'array'}),{payrollField:$('payrollField').value,incomeField:$('incomeField').value,incomeSplit:$('splitRevenue').checked?{field:$('incomeField2').value,cents:wholeCents(amount($('incomeSplitAmount').value))}:null});const balance=getBalance();reviewed=combineReports(balance,sfc,meta);
    reviewed.metadata=JSON.stringify(meta);
    const headers='<table><thead><tr><th>NMLS field</th><th>Original amount</th><th>XML amount</th></tr></thead><tbody>';
@@ -85,11 +87,12 @@ export function mountCombined(getMeta,getBalance,getSchedule){
    if(sfc.calculated)$('combinedPreview').innerHTML+='<h3>Schedules C & D filing review</h3>'+headers+dReviewRows(sfc).map(r=>'<tr class="'+(r.deps?'calculated-row':'')+'"><td>'+r.code+' — '+esc(r.label)+'</td><td>'+usd(r.cents)+'</td><td>'+r.whole+'</td></tr>').join('')+'</tbody></table>';
    $('combinedPreview').innerHTML+='<h3>Schedule O</h3><p>All '+scheduleOFields.length+' Schedule O fields ('+scheduleOFields[0].replace('_1','')+' through '+scheduleOFields.at(-1).replace('_1','')+') are included in the XML as 0.</p>';
    if(sfc.warnings?.length)$('combinedPreview').innerHTML+='<p>'+esc(sfc.warnings.join(' '))+'</p>';
-   $('combinedStatus').textContent=reviewed.issues.length?reviewed.issues.join(' '):'Combined balance sheet and income statement checks passed. Confirm your review to download.';
-  }catch(e){reviewed=null;$('combinedStatus').textContent=e.message;}finally{$('reviewCombined').disabled=false;}
+   if(reviewed.issues.length)$('combinedStatus').innerHTML='<strong>The XML cannot be downloaded yet.</strong> Fix '+(reviewed.issues.length===1?'this':'these')+' and review again:<ul>'+[...new Set(reviewed.issues)].map(i=>'<li>'+esc(i)+'</li>').join('')+'</ul>';else $('combinedStatus').textContent='Combined balance sheet and income statement checks passed. Confirm your review to download.';
+  }catch(e){reviewed=null;$('combinedStatus').textContent=e.message;failed=true;}finally{$('reviewCombined').disabled=false;hint(failed?'see the message above.':'');}
  };
  $('combinedXml').onclick=()=>{
   if(!reviewed?.xml||!$('combinedConfirm').checked)return;
   try{const meta=getMeta();if(JSON.stringify(meta)!==reviewed.metadata){reset();$('combinedStatus').textContent='Client or reporting details changed. Review the completed worksheets again.';return;}const xml=exportXml(reviewed.result,meta);const url=URL.createObjectURL(new Blob([xml],{type:'application/xml'}));const a=document.createElement('a');a.href=url;a.download=meta.company.replace(/[^a-z0-9]+/gi,'-')+'-Combined-FC-'+meta.date+'.xml';a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);$('combinedStatus').textContent='Combined Financial Condition XML downloaded. Complete remaining required schedules and completeness checks in NMLS.';}catch(e){$('combinedStatus').textContent=e.message;}
  };
+ hint();
 }

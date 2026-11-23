@@ -311,7 +311,9 @@ function renderSteps(){
  $('stepBack').hidden=currentStep===1;$('stepNext').hidden=currentStep===stepNames.length;$('stepNext').textContent=currentStep<stepNames.length?'Next: '+stepNames[currentStep]:'';
  if(currentStep===5)renderSheet();
 }
-function goToStep(n){currentStep=Math.min(stepNames.length,Math.max(1,n));renderSteps();window.scrollTo({top:0});}
+function goToStep(n){currentStep=Math.min(stepNames.length,Math.max(1,n));renderSteps();window.scrollTo({top:0});
+ // Arriving at the last step runs the combined review, so anything blocking the XML shows at once.
+ if(currentStep===5&&rows.some(r=>r.include)&&$('combinedXml').disabled&&!$('combinedConfirm').checked)$('reviewCombined').click();}
 $('steps').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)goToStep(Number(b.dataset.go));});
 $('stepBack').onclick=()=>goToStep(currentStep-1);$('stepNext').onclick=()=>goToStep(currentStep+1);
 document.addEventListener('financialDataChanged',()=>setTimeout(renderSteps,10));
