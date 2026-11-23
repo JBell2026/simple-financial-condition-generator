@@ -207,7 +207,7 @@ main[data-current] section[hidden]{display:none!important}
 .steps .step-text small{font-size:11px;opacity:.8}
 .steps .step.attention .step-text small{color:#985448;opacity:1;font-weight:600}
 .step-nav{display:flex;justify-content:space-between;gap:12px;margin:18px 0}
-.step-nav #stepNext{margin-left:auto}
+.step-nav #stepNext,.step-nav #newReport{margin-left:auto}
 @media(max-width:900px){.steps{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.steps .step{padding:8px 6px;flex-direction:column;text-align:center;gap:4px}.steps .step-text strong{font-size:11px;white-space:normal}.steps .step-text small{display:none}}
 /* Enter in NMLS sheet */
 .sheet-heading{margin:6px 0 10px;line-height:1.5}

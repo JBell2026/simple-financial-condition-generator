@@ -308,13 +308,16 @@ function renderSteps(){
  const states=stepStates();
  $('steps').innerHTML=stepNames.map((name,i)=>'<button type="button" class="step '+states[i]+(i+1===currentStep?' current':'')+'" data-go="'+(i+1)+'"'+(i+1===currentStep?' aria-current="step"':'')+'><span class="step-number">'+(i+1)+'</span><span class="step-text"><strong>'+name+'</strong><small>'+stepNote(i,states[i])+'</small></span></button>').join('');
  document.querySelector('main').dataset.current=String(currentStep);
- $('stepBack').hidden=currentStep===1;$('stepNext').hidden=currentStep===stepNames.length;$('stepNext').textContent=currentStep<stepNames.length?'Next: '+stepNames[currentStep]:'';
+ $('stepBack').hidden=currentStep===1;$('stepNext').hidden=currentStep===stepNames.length;$('newReport').hidden=currentStep!==stepNames.length;$('stepNext').textContent=currentStep<stepNames.length?'Next: '+stepNames[currentStep]:'';
  if(currentStep===5)renderSheet();
 }
 function goToStep(n){currentStep=Math.min(stepNames.length,Math.max(1,n));renderSteps();window.scrollTo({top:0});
  // Arriving at the last step runs the combined review, so anything blocking the XML shows at once.
  if(currentStep===5&&rows.some(r=>r.include)&&$('combinedXml').disabled&&!$('combinedConfirm').checked)$('reviewCombined').click();}
 $('steps').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)goToStep(Number(b.dataset.go));});
+// Starting over clears every figure on screen by loading a fresh page, which opens on step 1.
+// Saved clients and remembered choices live in browser storage and are kept.
+$('newReport').onclick=()=>{if(!window.confirm('Start a new report? This clears the client details, statements and every figure on screen. Saved clients and remembered choices are kept.'))return;document.querySelectorAll('input,select,textarea').forEach(el=>{if(el.type==='checkbox'||el.type==='radio')el.checked=el.defaultChecked;else if(el.tagName==='SELECT')[...el.options].forEach(o=>o.selected=o.defaultSelected);else el.value=el.defaultValue;});window.scrollTo({top:0});location.replace(location.pathname);};
 $('stepBack').onclick=()=>goToStep(currentStep-1);$('stepNext').onclick=()=>goToStep(currentStep+1);
 document.addEventListener('financialDataChanged',()=>setTimeout(renderSteps,10));
 ['beginEquity','otherAssetsExplanation','scheduleGross','scheduleNet'].forEach(id=>$(id).addEventListener('input',()=>setTimeout(renderSteps,10)));

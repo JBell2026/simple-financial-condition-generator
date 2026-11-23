@@ -35,6 +35,7 @@ Serve `dist/` with any static server for browser checks (`python3 -m http.server
 ## Product rules that are easy to break
 
 - **Five steps.** The page is worked through a sticky step bar: 1 Client, 2 Balance sheet, 3 Profit and loss, 4 Checks and equity, 5 Enter in NMLS. Each card carries `data-step`; only the current step's cards show. Each step shows Done, Needs attention or Not started (`stepStates`). Browser tests must move to a step before using its controls.
+- **Run a new report** (`#newReport`, shown only on step 5 where Next would be): after a confirmation it loads a fresh page on step 1 with every figure cleared. Saved clients and client memory are kept.
 - **XML download is never silently locked.** Opening step 5 runs the combined review automatically. A line beside the download button always says why it is locked (review not run, items to fix, confirmation box not ticked) or that it is ready, and blocking items are shown as a list.
 - **Enter in NMLS sheet** (step 5): one table of every NMLS line with an amount in screen order (Schedule A, A230J text, Schedule B, B-350R rollforward, Schedule C, Schedule D, Schedule O zeros), each marked Enter or Calculated by NMLS, with a company and period heading, a notice when earlier steps are unfinished, and a Print or save as PDF button that prints only the sheet.
 
