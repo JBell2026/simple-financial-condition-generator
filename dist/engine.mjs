@@ -157,7 +157,7 @@ const accountNumber=/^(?:\d{4,8}(?:[.-]\d+)?\s*[-–—:·]?\s+|\d{1,3}(?:[.-]\d
 // Returns the column count, any header labels, and the default column to import.
 export function amountColumns(lines){
  const texts=lines.map(l=>typeof l==='string'?l:l.text||'');const counts={};
- for(const t of texts){const n=moneyMatches(t).length,label=n?t.slice(0,moneyMatches(t)[0].index).trim():'';if(n>1&&label&&!/\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}\b/i.test(t))counts[n]=(counts[n]||0)+1;}
+ for(const t of texts){const n=moneyMatches(t).length,label=n?t.slice(0,moneyMatches(t)[0].index).trim():'';if(n>1&&label&&!/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2},?\s+\d{4}\b/i.test(t))counts[n]=(counts[n]||0)+1;}
  const best=Object.entries(counts).filter(([,lines])=>lines>1).sort((a,b)=>b[1]-a[1])[0];if(!best)return {count:1,labels:[],index:-1};
  const count=Number(best[0]);let labels=[],index=-1;
  if(!texts.slice(0,40).some(t=>/(?:^|\s{2})(?:grand\s+)?total\s*$/i.test(t)))for(const t of texts.slice(0,40)){
@@ -202,8 +202,10 @@ function currentAssetBreakdown(supplements, expected){
  }
  return candidates.length===1?candidates[0]:null;
 }
+// Statement headings such as "As of September 30, 2026" contain numbers but are not amounts.
+export const looksLikeDate=text=>/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+\d{1,2}(?:st|nd|rd|th)?\b|\b\d{1,2}\/\d{1,2}\/\d{2,4}\b|\bpage\s+\d+\s+of\s+\d+|\b(?:19|20)\d{2}\s*$/i.test(String(text));
 export function parseLines(lines,{supplements=[],entity=''}={}){
- let section='',active=true,cashCode='',otherAssets=false,group='',fixedStart=0;const rows=[],controls={},notes=[];let skipped=0;
+ let section='',active=true,cashCode='',otherAssets=false,group='',fixedStart=0;const unread=[];const rows=[],controls={},notes=[];let skipped=0;
  for(let i=0;i<lines.length;i++){
   let {text,source}=typeof lines[i]==='string'?{text:lines[i],source:'Line '+(i+1)}:lines[i];
   text=text.trim(); if(!text)continue;
@@ -221,8 +223,11 @@ export function parseLines(lines,{supplements=[],entity=''}={}){
    continue;
   }
   const first=matches[0],label=text.slice(0,first.index).trim().replace(/\s+/g,' ').replace(accountNumber,'').replace(/^[·•\-–—]\s*/,'');const shown=tidyLabel(label);
+  // A line with an amount that sits outside every section could not be read. Dates and
+  // page furniture are not reported.
+  if(label&&!section&&!looksLikeDate(text)&&/[a-z]{3}/i.test(label)&&amount(first[0])!==null)unread.push({text,source,reason:'It comes before any Assets, Liabilities or Equity heading.'});
   if(!label||!section)continue;
-  if(matches.length>1){notes.push(source+': multiple amounts. Choose the amount column before importing.');continue;}
+  if(matches.length>1){notes.push(source+': multiple amounts. Choose the amount column before importing.');unread.push({text,source,reason:'It has more than one amount.'});continue;}
   const cents=amount(first[0]);if(cents===null)continue;
   const total=/^(total\b|net (?:assets|other assets|fixed assets|property)\b)/i.test(label);
   if(total){
@@ -259,7 +264,7 @@ export function parseLines(lines,{supplements=[],entity=''}={}){
  // Every account stays on its own line, as on the statement. Accounts that share an
  // NMLS field are added together only in the field totals and the review's net lines.
  const kept=rows.filter(r=>r.include);for(const r of kept)r.cents=wholeCents(r.cents);for(const key of Object.keys(controls))controls[key]=wholeCents(controls[key]);
- return {rows:[...kept.filter(r=>r.code),...kept.filter(r=>!r.code)],controls,notes,skipped};
+ return {rows:[...kept.filter(r=>r.code),...kept.filter(r=>!r.code)],controls,notes,skipped,unread};
 }
 export function reconcile(rows,controls={}){
  const selected=rows.filter(r=>r.include);const totals={Assets:0,Liabilities:0,Equity:0},groups={};const issues=[],warnings=[];

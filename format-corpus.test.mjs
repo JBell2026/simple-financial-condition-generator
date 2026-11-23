@@ -13,7 +13,9 @@ for(const [name,c] of Object.entries(corpus)){
  assert.equal(rec.totals.Assets,c.expect.assets,name+': total assets');
  assert.equal(rec.difference,0,name+': balance sheet foots');
  assert.deepEqual(rec.issues,[],name+': no balance sheet issues');
+ assert.deepEqual(parsed.unread,[],name+': every balance sheet line read');
  const ex=parseExpenses(all,true),fig=extractPLFigures(all);
+ assert.deepEqual(ex.unread.map(u=>u.text),[],name+': every P&L line read');
  assert.equal(expenseSummary(ex).total,c.expect.expenses,name+': expenses incl. cost of revenue');
  assert.equal(fig.gross,c.expect.gross,name+': gross income');assert.equal(fig.reportedNet,c.expect.net,name+': net income');
  // Gross income less every imported expense equals the statement's net income.
@@ -75,3 +77,20 @@ console.log('Business type equity mapping passed.');
  assert.equal(classifyExpense('Provision for income taxes'),'K');assert.equal(classifyExpense('Income Tax Expense'),'K');assert.equal(classifyExpense('Payroll taxes'),'C');assert.equal(classifyExpense('Property tax'),'E');assert.equal(classifyExpense('Loan officer commissions'),'B');
  assert(isLoanOfficerPay('Loan officer signing bonuses'));assert(isLoanOfficerPay('MLO compensation'));assert(!isLoanOfficerPay('Salaries and wages'));}
 console.log('Category to NMLS line mapping passed.');
+// Lines the app cannot place are reported, not silently skipped.
+{const odd=parseLines(['Balance Sheet','Petty cash float  $50.00','Assets','Cash  $100.00','Equity','Retained Earnings  $100.00']);assert.deepEqual(odd.unread.map(u=>u.text),['Petty cash float  $50.00']);
+ assert.deepEqual(parseLines(['Balance Sheet','As of September 30, 2026','Assets','Cash  $100.00']).unread,[]);
+ const pl=parseExpenses(['Profit and Loss','For the nine months ended September 30, 2026','Consulting payments  $900.00','Income','Fees  $5,000.00','Expenses','Rent  $100.00','Net Income  $4,000.00']);assert.deepEqual(pl.unread.map(u=>u.text),['Consulting payments  $900.00']);assert.deepEqual(pl.map(r=>r.label),['Rent']);}
+// Client memory: choices are stored per client without amounts and recalled by account name.
+{const store={};globalThis.localStorage={getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=v;}};
+ const m=await import('./dist/client-memory.mjs');
+ assert.equal(m.rememberAccount('Acme LLC','123','CHASE INK  ','Liabilities','B120'),true);m.rememberExpense('Acme LLC','123','Dues & Subscriptions','F');m.rememberExpense('Acme LLC','123','Rent (split)','C');m.rememberSetting('Acme LLC','123','includeCogs',true);
+ const got=m.recall('Acme LLC','123');assert.deepEqual(got.bs[m.memoryKey('Chase Ink')],{section:'Liabilities',code:'B120'});assert.equal(got.pl[m.memoryKey('dues and subscriptions')],undefined);assert.equal(got.pl[m.memoryKey('Dues & Subscriptions')],'F');assert.equal(got.pl.rent,undefined);assert.equal(got.settings.includeCogs,true);
+ assert.equal(m.savedCount('Acme LLC','123'),2);assert.equal(m.savedCount('Other Co',''),0);assert.deepEqual(m.recall('','123').bs,got.bs);
+ assert(!/\d{3,}\.\d{2}|\$/.test(JSON.stringify(store)),'no amounts are stored');
+ m.forget('Acme LLC','123');assert.equal(m.savedCount('Acme LLC','123'),0);assert.equal(m.rememberAccount('','','Cash','Assets','A010'),false);delete globalThis.localStorage;}
+console.log('Reading report inputs and client memory passed.');
+// Month names are matched whole, so an account such as Marketing is not mistaken for a date.
+{const {looksLikeDate}=await import('./dist/engine.mjs');assert(!looksLikeDate('Marketing  10,000.00'));assert(!looksLikeDate('Maintenance  12,000.00'));assert(looksLikeDate('As of September 30, 2026'));assert(looksLikeDate('Mar 1 to Sep 30'));assert(looksLikeDate('Page 2 of 3'));
+ const odd=parseExpenses(['Profit and Loss','Money out','Marketing  10,000.00','Expenses','Rent  12,000.00']);assert.deepEqual(odd.unread.map(u=>u.text),['Marketing  10,000.00']);}
+console.log('Date detection passed.');

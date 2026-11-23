@@ -1,6 +1,7 @@
 import {dFields,dFieldMap,suggestD,splitExpense,extractPLFigures,buildScheduleD,addScheduleWorkbook,dReviewRows} from './schedule-d.mjs';
 import {addBalanceReview} from './calculated.mjs';
-import {amount as exactAmount,moneyMatches,selectTotalAmountLine,selectAmountsByPage,tidyLabel,plural,wholeCents,usd} from './engine.mjs';
+import {amount as exactAmount,moneyMatches,selectTotalAmountLine,selectAmountsByPage,tidyLabel,plural,wholeCents,usd,looksLikeDate} from './engine.mjs';
+import {recall,rememberExpense,rememberSetting,memoryKey} from './client-memory.mjs';
 // Amounts typed or read in this section are whole dollars.
 const amount=value=>wholeCents(exactAmount(value));
 import {isBalanceSheetTitle,isOtherStatementTitle,pageChecks,chosenPages,onlyPages,pagePhrase} from './balance-source.mjs';
@@ -14,6 +15,7 @@ export function classifyExpense(label){
  return rules.find(([,rx])=>rx.test(s))?.[0]||'I';
 }
 export function expenseConfidence(row){
+ if(row.remembered)return {level:'reviewed',label:'Remembered',reason:'You chose this category for this client before.'};
  if(row.categoryReviewed)return {level:'reviewed',label:'Reviewed',reason:'You selected this SFC category. This does not verify the source amount.'};
  if(!Number.isSafeInteger(row.cents)||!String(row.label||'').trim())return {level:'low',label:'Needs review',reason:'The description or amount is incomplete.'};
  if(row.source==='Manual'||/\/ split/.test(row.source||''))return {level:'low',label:'Needs review',reason:'This line was entered or split manually; confirm its category.'};
@@ -24,7 +26,7 @@ export function expenseConfidence(row){
  return {level:'medium',label:'Medium',reason:'The description matches a broader category rule; confirm the classification.'};
 }
 export function parseExpenses(lines,includeCogs=false){
- let active=false,cogs=false,costHeader=null,cogsCount=0,blocked=false,finished=false,repeated=0;const out=[],costOfRevenue={total:0,count:0};
+ let active=false,cogs=false,costHeader=null,cogsCount=0,blocked=false,finished=false,repeated=0,inRevenue=false;const unread=[];const out=[],costOfRevenue={total:0,count:0};
  const pages=new Map();for(const entry of lines){if(entry?.page!=null){if(!pages.has(entry.page))pages.set(entry.page,[]);pages.get(entry.page).push(entry.text||'');}}
  const excludedPages=new Set([...pages].filter(([,texts])=>(!texts.some(t=>isOtherStatementTitle(t))&&texts.some(t=>isBalanceSheetTitle(t)||/^(?:(?:consolidated|comparative|combined|condensed|unaudited)\s+)*(?:statements?\s+of\s+)?cash\s*flows?/i.test(t.trim())))||(!texts.some(t=>isOtherStatementTitle(t))&&texts.some(t=>/^assets\s*$/i.test(t.trim()))&&texts.some(t=>/^(?:total\s+)?liabilities\b/i.test(t.trim())))).map(([page])=>page));
  let lastPage;
@@ -47,29 +49,31 @@ export function parseExpenses(lines,includeCogs=false){
   const matches=moneyMatches(text),first=matches[0],label=(first?text.slice(0,first.index):text).trim().replace(/(?:\s+[-–—])+\s*$/,'').replace(/\s+/g,' ').replace(/[:\s]+$/,'');
   const cents=first?amount(first[0]):null;
   if(/^total\s+/i.test(label)&&cost.test(label.replace(/^total\s+/i,''))){if(cogs){if(costHeader&&!costHeader.cents&&cents)costHeader.cents=cents;finishCogs();active=false;}continue;}
-  if(cost.test(label)){finishCogs();cogs=true;costHeader={label,cents,source:source+' | Original P&L line: '+raw};active=false;continue;}
+  if(cost.test(label)){inRevenue=false;finishCogs();cogs=true;costHeader={label,cents,source:source+' | Original P&L line: '+raw};active=false;continue;}
   if(/^gross\s+(?:profit|loss|margin)/i.test(label)){finishCogs();active=false;continue;}
   // The first complete income statement ends at its net income line. A later
   // presentation of the same period (management or non-GAAP view) is not imported again.
   if(finished){if(cents!==null&&label&&!/^(?:total|subtotal|net)\b/i.test(label))repeated++;continue;}
   if(/^net\s+(?:income|profit|loss|earnings)(?:\s*\(loss\))?$/i.test(label)&&cents!==null&&(out.length||costOfRevenue.count)){finishCogs();active=false;finished=true;continue;}
-  if(/^(?:(?:total|net)\s+)?(?:net\s+(?:income|profit|loss|earnings)|operating\s+(?:income|profit|loss)|other\s+income|earnings\s+before|ebitda)/i.test(label)){finishCogs();active=false;continue;}
+  if(/^(?:(?:total|net)\s+)?(?:net\s+(?:income|profit|loss|earnings)|operating\s+(?:income|profit|loss)|other\s+income|earnings\s+before|ebitda)/i.test(label)){finishCogs();active=false;inRevenue=/^other\s+income/i.test(label);continue;}
   // A heading such as "General Expenses" that carries its own amount inside an expense
   // section is an expense line, not a new heading.
   const expenseHeading=/^(?:(?:ordinary|operating|other|administrative|business|general(?:\s*(?:and|&)\s*administrative)?)\s+)?expenses?(?:\s*\([^)]*\))?$/i.test(label);
-  if((expenseHeading&&!(cents&&(active||/^other\s/i.test(label))&&!/^(?:operating\s+)?expenses?$/i.test(label)))||/^(?:expense|expenses)\s*[-:]?\s*(?:amount|total)$/i.test(label)){finishCogs();active=true;continue;}
-  if(/^(?:total\s+)?(?:(?:trading|operating|ordinary|gross)\s+)?(?:income|revenues?|sales)(?:\s+income)?$/i.test(label)){finishCogs();active=false;continue;}
+  if((expenseHeading&&!(cents&&(active||/^other\s/i.test(label))&&!/^(?:operating\s+)?expenses?$/i.test(label)))||/^(?:expense|expenses)\s*[-:]?\s*(?:amount|total)$/i.test(label)){finishCogs();active=true;inRevenue=false;continue;}
+  if(/^(?:total\s+)?(?:(?:trading|operating|ordinary|gross)\s+)?(?:income|revenues?|sales)(?:\s+income)?$/i.test(label)){finishCogs();active=false;inRevenue=cents===null;continue;}
   if(/\brevenues?\b/i.test(label))continue;
   if(cogs){if(label&&cents&&!/^(?:total|subtotal)\b/i.test(label)){cogsCount++;costLine(label,cents,source+' | Original P&L line: '+raw);}continue;}
   const standaloneAdjustment=/^(?:interest expenses?|(?:provision for |total )?income tax(?:es)?(?: expense| provision)?|provision for (?:income )?taxes|extraordinary items?|noncontrolling interest)$/i.test(label)&&cents!==null;
-  if(!active&&!standaloneAdjustment)continue;
+  if(!active&&!standaloneAdjustment){if(!inRevenue&&label&&cents&&/[a-z]{3}/i.test(label)&&!/^(?:total|subtotal|net|gross|less\b|adjusted\b|(?:income|earnings|profit|loss)(?:\s*\(loss\))?\s+(?:before|from)\b|operating\s+(?:income|profit|loss)\b)/i.test(label)&&!/%|margin|ebitda/i.test(label)&&!looksLikeDate(raw))unread.push({text:raw,source,page:entry?.page,reason:'It is not under an income, cost or expense heading the app recognizes.'});continue;}
   if(/^total\s+(?:(?:operating|other|ordinary|administrative|business)\s+)?expenses?$/i.test(label)){finishCogs();active=false;continue;}
   if((!active&&!standaloneAdjustment)||/^(?:total|subtotal)\b/i.test(label))continue;
   if(!label||cents===null||cents===0)continue;
   if(/^(?:page\b|for the\b|as of\b|accrual basis\b|cash basis\b|notes?\b|schedule [a-z]\b)/i.test(label))continue;
   push(label,cents,source+' | Original P&L line: '+raw);
  }
- finishCogs();for(const r of out)r.cents=wholeCents(r.cents);costOfRevenue.total=wholeCents(costOfRevenue.total);out.costOfRevenue=costOfRevenue;out.repeatedLines=repeated;return out;
+ finishCogs();for(const r of out)r.cents=wholeCents(r.cents);costOfRevenue.total=wholeCents(costOfRevenue.total);out.costOfRevenue=costOfRevenue;out.repeatedLines=repeated;
+ // Unread lines are reported only from pages that are part of the income statement.
+ const plPages=new Set([...pages].filter(([,texts])=>texts.some(t=>isOtherStatementTitle(t))).map(([p])=>p));out.unread=pages.size>1&&plPages.size?unread.filter(u=>plPages.has(u.page)):unread;return out;
 }
 export function expenseSummary(rows){
  const active=rows.filter(r=>r.include),counts={},totals={};const issues=[];
@@ -80,7 +84,7 @@ export function expenseSummary(rows){
 }
 export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
  const $=id=>document.getElementById(id),esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),money=c=>usd(c);
- let rows=[],file=null,book=null,lastLines=[],sourceName='',busy=false,cost={total:0,count:0};
+ let rows=[],file=null,book=null,lastLines=[],sourceName='',busy=false,cost={total:0,count:0},lastUnread=[],lastRepeated=0,usedOcr=false;
  function message(s){$('expenseStatus').textContent=s;}
  function render(){
   $('expenseRows').innerHTML=rows.map(r=>`<tr data-id="${r.id}"><td><input type="checkbox" data-key="include" aria-label="Include expense ${esc(r.label)}" ${r.include?'checked':''}></td><td><input data-key="label" aria-label="Expense description" value="${esc(r.label)}"></td><td><input data-key="cents" aria-label="Expense amount" value="${r.cents===null?'':(r.cents/100).toFixed(0)}" inputmode="numeric"></td><td><select data-key="category" aria-label="Expense category">${categories.map(([c,n])=>`<option value="${c}" ${r.category===c?'selected':''}>${c} — ${n}</option>`).join('')}</select></td><td data-confidence="${r.id}"></td><td><details class="row-detail"><summary>Source</summary>${esc(r.source)}</details></td><td class="expense-actions"><button type="button" class="secondary" data-split="${r.id}" title="Move part of this amount to another category">Split</button><button data-remove="${r.id}" aria-label="Remove expense">×</button></td></tr>`).join('');
@@ -112,6 +116,21 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
   +'<tr class="'+(diff===0?'reconciled':'unreconciled')+'"><th>'+(diff===null?'Enter total income and the P&amp;L’s net income to compare':diff===0?'They match':'They do not match — difference')+'</th><th>'+(diff===null?'—':dollars(diff))+'</th></tr></tbody></table>'+(diff&&Math.abs(diff)<=500&&valid.every(r=>r.cents%100===0)?'<p class="small">A difference this small is rounding to whole dollars. Change one expense line, or the net income, by that amount so the figures tie. The app does not adjust anything for you.</p>':'');
  const excluded=cost.total&&!$('includeCogs').checked;$('costNotice').hidden=!cost.total;
  $('costNotice').textContent=cost.total?(excluded?'This P&L reports '+money(cost.total)+' of cost of revenue / cost of goods sold ('+cost.count+' line'+(cost.count===1?'':'s')+') that is not in the expense list.'+(diff!==null&&Math.abs(diff-cost.total)<=500?(diff===cost.total?' That amount equals the reconciliation difference.':' That accounts for the reconciliation difference, apart from rounding.'):'')+' Tick “Include cost of revenue lines” if those costs, such as loan officer commissions, belong in Schedule D.':money(cost.total)+' of cost of revenue ('+cost.count+' line'+(cost.count===1?'':'s')+') is included in the expense list. Review each category.'):'';}
+ // Reading report: appears only when the app had trouble with this P&L or sees a way to
+ // make it read better.
+ {const items=[],esc2=esc,net=amount($('scheduleNet').value),listTotal=s.active.filter(r=>Number.isSafeInteger(r.cents)).reduce((t,r)=>t+r.cents,0),gap=Number.isSafeInteger(grossValue)&&Number.isSafeInteger(net)?grossValue-listTotal-net:null;
+ if(lastLines.length){
+  if(!rows.length)items.push('No expense lines were found. The app looks for a heading such as Expenses or Operating expenses. If the P&amp;L is on one page of a longer file, tick only that page under “P&amp;L pages to read”.');
+  else{
+   if(!Number.isSafeInteger(grossValue))items.push('Total income was not found on the statement. Type it in the “Total gross income” box.');
+   if(!Number.isSafeInteger(net))items.push('The net income line was not found on the statement. Type it in the “Net income on the P&amp;L” box so the checks can run.');
+   if(gap!==null&&Math.abs(gap)>1000&&!(cost.total&&!$('includeCogs').checked&&Math.abs(gap-cost.total)<=1000))items.push('Income minus the expenses read is '+esc2(money(Math.abs(gap)))+' away from the P&amp;L’s net income, which is more than rounding. An expense is probably missing, counted twice or in the wrong place.');
+  }
+  if(lastUnread.length)items.push(plural(lastUnread.length,'line')+' with an amount '+(lastUnread.length===1?'was':'were')+' not read:<ul>'+lastUnread.slice(0,12).map(u=>'<li>'+esc2(u.text.replace(/\s+/g,' '))+' <small>('+esc2(String(u.source).split(' | ')[0])+')</small></li>').join('')+(lastUnread.length>12?'<li>and '+(lastUnread.length-12)+' more</li>':'')+'</ul>If any of these is an expense, use “Add expense” to enter it.');
+  if(lastRepeated>2)items.push('This file shows the income statement more than once. The first one, through its net income line, was used and '+lastRepeated+' later amount lines were left out so nothing is counted twice. To choose a different one, tick only its page under “P&amp;L pages to read”.');
+  if(usedOcr)items.push('This file is a scanned image, so the text was read by character recognition. Check each amount against the statement; a digit can be misread. A PDF or Excel file exported from the accounting software reads more reliably.');
+ }
+ $('plReport').hidden=!items.length;$('plReport').innerHTML=items.length?'<strong>Reading report</strong><ul>'+items.map(i=>'<li>'+i+'</li>').join('')+'</ul>':'';}
  // Category totals: the on-screen replacement for the SFC worksheet. One row per category
  // with its total and the NMLS line it is entered on.
  {const pay=payrollSplit(),byCat=Object.fromEntries(categories.map(([c])=>[c,{total:0,count:0}]));for(const r of s.active){if(!Number.isSafeInteger(r.cents)||!byCat[r.category])continue;byCat[r.category].total+=r.cents;byCat[r.category].count++;}
@@ -153,11 +172,11 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
  // Worksheet and column pickers apply to Excel P&Ls only.
  // A new source resets the page picker; picking a page re-reads only that page.
  let sourceLines=[];
- function setSource(lines,name){payrollEdited=false;sourceLines=lines;const pages=pageChecks(lines,esc,tidyLabel);$('plPage').innerHTML=pages.html;$('plPageBox').hidden=pages.count<2;load(lines,name);}
+ function setSource(lines,name){payrollEdited=false;sourceLines=lines;usedOcr=lines.some(l=>l.ocr);{const m=getMeta(),saved=recall(m.company,m.nmls).settings;if(typeof saved.includeCogs==='boolean')$('includeCogs').checked=saved.includeCogs;if(saved.incomeField&&[...$('incomeField').options].some(o=>o.value===saved.incomeField))$('incomeField').value=saved.incomeField;}const pages=pageChecks(lines,esc,tidyLabel);$('plPage').innerHTML=pages.html;$('plPageBox').hidden=pages.count<2;load(lines,name);}
  $('plPage').onchange=()=>{const pages=chosenPages($('plPage'));load(onlyPages(sourceLines,pages),sourceName);if(pages!==null)message(!pages.length?'Tick at least one page to read.':rows.length?`${plural(rows.length,'expense line')} read from ${pagePhrase(pages)} of ${sourceName} only. Review each allocation.`:`No expense lines were found on ${pagePhrase(pages)}.`);};
  function showChoices(){$('expenseSheet').closest('label').hidden=!book||$('expenseSheet').options.length<2;$('expenseColumn').closest('label').hidden=!book;}
  function setBusy(v){if(!v)showChoices();busy=v;['expenseFile','useStatement','analyzeExpenses','downloadExpenses','expenseSheet','expenseColumn','includeCogs'].forEach(id=>$(id).disabled=v);$('plPage').querySelectorAll('input').forEach(b=>b.disabled=v);summary();}
- function load(lines,name){lastLines=lines;sourceName=name;const parsed=parseExpenses(lines,$('includeCogs').checked);cost=parsed.costOfRevenue;const repeatedLines=parsed.repeatedLines;rows=parsed.map(r=>{const field=suggestD(r.label,r.category);return {...r,field,category:r.category};});const figures=extractPLFigures(lines);if(figures.gross!==undefined)$('scheduleGross').value=(figures.gross/100).toFixed(0);$('scheduleInterest').value=figures.interest===undefined?'':(figures.interest/100).toFixed(0);if(figures.reportedNet!==undefined)$('scheduleNet').value=(figures.reportedNet/100).toFixed(0);onChange();render();message(rows.length?`${plural(rows.length,'expense line')} from ${name}. Review each allocation.`+(repeatedLines>2?` The first income statement, through its net income line, was imported; ${repeatedLines} amount lines after it (a second presentation or a supporting schedule) were left out so nothing is counted twice.`:''):'No expense lines were recognized. Check that the PDF includes an Expenses or Cost of Revenue section. If this continues, share the PDF so we can check its layout.');}
+ function load(lines,name){lastLines=lines;sourceName=name;const meta=getMeta(),memory=recall(meta.company,meta.nmls);const parsed=parseExpenses(lines,$('includeCogs').checked);cost=parsed.costOfRevenue;const repeatedLines=parsed.repeatedLines;lastUnread=parsed.unread;lastRepeated=repeatedLines;rows=parsed.map(r=>{const saved=memory.pl[memoryKey(r.label)];return saved&&categories.some(([c])=>c===saved)?{...r,category:saved,remembered:true}:r;}).map(r=>{const field=suggestD(r.label,r.category);return {...r,field,category:r.category};});const figures=extractPLFigures(lines);$('scheduleGross').value=figures.gross===undefined?'':(figures.gross/100).toFixed(0);$('scheduleInterest').value=figures.interest===undefined?'':(figures.interest/100).toFixed(0);$('scheduleNet').value=figures.reportedNet===undefined?'':(figures.reportedNet/100).toFixed(0);onChange();render();message(rows.length?`${plural(rows.length,'expense line')} from ${name}. Review each allocation.`:'No expense lines were recognized. Check that the PDF includes an Expenses or Cost of Revenue section. If this continues, share the PDF so we can check its layout.');}
  // Pick the amount column of an Excel P&L: a column headed Total if there is one,
  // otherwise the rightmost column among those holding the most numbers.
  function detectColumn(){
@@ -178,12 +197,13 @@ export function mountAllocator({readPdf,getSource,getMeta,onChange,getBalance}){
  $('analyzeExpenses').onclick=()=>{if(file)analyze();else if(lastLines.length)load(lastLines,sourceName);else message('Use the uploaded statement or choose a P&L file first.');};
  $('expenseSheet').onchange=()=>{detectColumn();analyze();};
  $('expenseColumn').onchange=()=>{if(file&&book)analyze();};
- $('includeCogs').onchange=()=>{if(lastLines.length)load(lastLines,sourceName);};
+ $('includeCogs').onchange=()=>{const m=getMeta();rememberSetting(m.company,m.nmls,'includeCogs',$('includeCogs').checked);if(lastLines.length)load(lastLines,sourceName);};
+ $('incomeField').addEventListener('change',()=>{const m=getMeta();rememberSetting(m.company,m.nmls,'incomeField',$('incomeField').value);});
  $('addExpense').onclick=()=>{rows.push({id:Math.max(0,...rows.map(r=>r.id))+1,label:'New expense',cents:0,category:'I',field:'D280',include:true,source:'Manual'});onChange();render();};
- $('expenseRows').addEventListener('input',e=>{const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id));const k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:k==='cents'?amount(e.target.value):e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();});
- $('scheduleAllocationRows').addEventListener('input',e=>{const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id));const k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:k==='cents'?amount(e.target.value):e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();});
- $('expenseRows').addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox'){const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id)),k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();}});
- $('scheduleAllocationRows').addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox'){const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id)),k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();}});
+ $('expenseRows').addEventListener('input',e=>{const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id));const k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:k==='cents'?amount(e.target.value):e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;r.remembered=false;const m=getMeta();rememberExpense(m.company,m.nmls,r.label,r.category);}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();});
+ $('scheduleAllocationRows').addEventListener('input',e=>{const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id));const k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:k==='cents'?amount(e.target.value):e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;r.remembered=false;const m=getMeta();rememberExpense(m.company,m.nmls,r.label,r.category);}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();});
+ $('expenseRows').addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox'){const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id)),k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;r.remembered=false;const m=getMeta();rememberExpense(m.company,m.nmls,r.label,r.category);}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();}});
+ $('scheduleAllocationRows').addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox'){const r=rows.find(r=>r.id===Number(e.target.closest('tr')?.dataset.id)),k=e.target.dataset.key;if(!r||!k)return;r[k]=k==='include'?e.target.checked:e.target.value;if(k==='category'){r.field=suggestD('',r.category);r.categoryReviewed=true;r.remembered=false;const m=getMeta();rememberExpense(m.company,m.nmls,r.label,r.category);}if(k==='label')r.categoryReviewed=false;if(k==='category'||k==='field'){onChange();render();return;}onChange();summary();}});
  let splitId=null;
  $('splitField').innerHTML=categories.map(([c,n])=>'<option value="'+c+'">'+c+' — '+esc(n)+'</option>').join('');
  function splitByCategory(id,part,category){const original=rows.find(r=>r.id===id);if(!original||!Number.isSafeInteger(part)||!part||!categories.some(([c])=>c===category))throw Error('Enter the amount to move and choose a category.');if(Math.sign(part)!==Math.sign(original.cents)||Math.abs(part)>=Math.abs(original.cents))throw Error('The amount to move must be less than the line’s amount.');original.cents-=part;rows.splice(rows.indexOf(original)+1,0,{...original,id:Math.max(0,...rows.map(r=>r.id))+1,cents:part,category,categoryReviewed:true,label:original.label+' (split)',source:original.source+' / split'});}
