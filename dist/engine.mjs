@@ -5,7 +5,7 @@ export const fields = {
  A060:['Mortgage loans held for sale, lower of cost or market','Assets'],A062:['Mortgage loans held for sale, fair value','Assets'],
  A010:['Cash and cash equivalents','Assets'],A020:['Restricted cash','Assets'],A050:['Receivables from unrelated parties','Assets'],A190:['Receivables from related parties','Assets'],A230C:['Accounts receivable','Assets'],A180:['Property and equipment, net','Assets'],A210:['Goodwill and intangible assets','Assets'],A230H:['Other assets','Assets'],
  B009:['Warehouse lines of credit','Liabilities'],B010:['Debt facilities','Liabilities'],B080:['Short-term payables to related parties','Liabilities'],B090:['Short-term notes to unrelated parties','Liabilities'],B100:['Accrued expenses','Liabilities'],B120:['Other current liabilities','Liabilities'],B130:['Long-term liabilities to related parties','Liabilities'],B140:['Other long-term liabilities','Liabilities'],B190:['Income taxes payable','Liabilities'],
- B250:['Preferred stock','Equity'],B260:['Common stock','Equity'],B270:['Additional paid-in capital','Equity'],B280:['Retained earnings','Equity'],B290:['Treasury stock','Equity'],B300:['Other comprehensive income','Equity'],B310:['Noncontrolling interest','Equity'],B320:['General partners’ capital','Equity'],B330:['Limited partners’ capital','Equity'],B340:['Members’ capital','Equity']
+ B250:['Preferred stock','Equity'],B260:['Common stock','Equity'],B270:['Additional paid-in capital','Equity'],B280:['Retained earnings','Equity'],B290:['Treasury stock','Equity'],B300:['Other comprehensive income','Equity'],B310:['Noncontrolling interest','Equity'],B240:['Other corporate equity','Equity'],B320:['General partners’ capital','Equity'],B330:['Limited partners’ capital','Equity'],B340:['Members’ capital','Equity']
 };
 export function amount(v){
  if(typeof v==='number')return Number.isFinite(v)?Math.round(v*100):null;
@@ -98,6 +98,15 @@ export function exportCsvText(result,meta){
   meta.company,meta.nmls,meta.date,code,fields[code][0],rounded(cents),(cents/100).toFixed(2),(result.difference/100).toFixed(2),result.roundingDifference
  ]);
  return [headers,...data].map(row=>row.map(quote).join(',')).join('\r\n')+'\r\n';
+}
+// Equity fields by business type. A corporation's equity goes in the corporate lines;
+// an LLC's equity all goes in members' capital.
+export const equityFields={corporation:['B250','B260','B270','B280','B290','B300','B310','B240'],llc:['B340']};
+export function suggestEquity(label,entity){
+ if(entity==='llc')return 'B340';
+ const code=suggest(label,'Equity');
+ if(entity==='corporation')return equityFields.corporation.includes(code)?code:''; // unclear names are left for review
+ return code;
 }
 export function suggest(label,section){
  const s=label.toLowerCase();let code='';
@@ -193,7 +202,7 @@ function currentAssetBreakdown(supplements, expected){
  }
  return candidates.length===1?candidates[0]:null;
 }
-export function parseLines(lines,{supplements=[]}={}){
+export function parseLines(lines,{supplements=[],entity=''}={}){
  let section='',active=true,cashCode='',otherAssets=false,group='',fixedStart=0;const rows=[],controls={},notes=[];let skipped=0;
  for(let i=0;i<lines.length;i++){
   let {text,source}=typeof lines[i]==='string'?{text:lines[i],source:'Line '+(i+1)}:lines[i];
@@ -233,7 +242,7 @@ export function parseLines(lines,{supplements=[]}={}){
   const fixedTotal=fixedLine&&!fixedDetail.length;
   if(fixedLine)fixedStart=rows.length;
   const contraOtherAsset=otherAssets&&/^accumulated amorti[sz]ation$/i.test(label);
-  let code=fixedTotal?'A180':total?'':contraOtherAsset?'A230H':cashCode||suggest(label,section),basis=code?'account name':'';
+  let code=fixedTotal?'A180':total?'':contraOtherAsset?'A230H':cashCode||(section==='Equity'&&entity?suggestEquity(label,entity):suggest(label,section)),basis=code?'account name':'';
   if(!total&&!code){code=suggestFromHeading(group,section);if(code)basis='group heading “'+tidyLabel(group)+'”';}
   if(!total&&/long.term|non.?current/i.test(group)&&(code==='B090'||code==='B080')){code=code==='B090'?'B140':'B130';basis='group heading “'+tidyLabel(group)+'”';}
   if(total)group='';

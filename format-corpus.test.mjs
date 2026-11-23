@@ -60,3 +60,12 @@ console.log('Separate account lines per NMLS field passed.');
  const e=parseExpenses(['Profit and Loss','Cost of Revenue','Commissions  $500.60','Expenses','Rent  $1,200.49','Software  $99.50','Net Income  $10.00'],true);assert.deepEqual(e.map(r=>r.cents),[50100,120000,10000]);assert.equal(e.costOfRevenue.total,50100);
  assert.deepEqual(extractPLFigures(['Profit and Loss','Total Income  $5,000.55','Interest Income  $10.49','Net Income  $2,999.50']),{gross:500100,interest:1000,reportedNet:300000});}
 console.log('Whole-dollar rounding passed.');
+// Business type decides where equity goes.
+{const {suggestEquity,equityFields}=await import('./dist/engine.mjs');
+ const eq=['Balance Sheet','Assets','Cash  $300.00','Equity','Common Stock  $10.00','Additional Paid-In Capital  $40.00','Retained Earnings  $150.00','Net Income  $100.00'];
+ const llc=parseLines(eq,{entity:'llc'});assert(llc.rows.filter(r=>r.section==='Equity').every(r=>r.code==='B340'));assert.equal(reconcile(llc.rows,llc.controls).groups.B340,30000);
+ const corp=parseLines(eq,{entity:'corporation'});assert.deepEqual(corp.rows.filter(r=>r.section==='Equity').map(r=>r.code),['B260','B270','B280','B300']);assert(corp.rows.filter(r=>r.section==='Equity').every(r=>equityFields.corporation.includes(r.code)));
+ assert.equal(suggestEquity("Members' Capital",'llc'),'B340');assert.equal(suggestEquity("Members' Capital",'corporation'),'');assert.equal(suggestEquity('Treasury Stock','corporation'),'B290');assert.equal(suggestEquity('Member contributions','llc'),'B340');
+ assert.deepEqual(parseLines(eq).rows.map(r=>r.code),parseLines(eq,{entity:''}).rows.map(r=>r.code));
+ assert.deepEqual(equityFields,{corporation:['B250','B260','B270','B280','B290','B300','B310','B240'],llc:['B340']});}
+console.log('Business type equity mapping passed.');
