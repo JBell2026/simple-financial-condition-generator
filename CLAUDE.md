@@ -6,7 +6,7 @@ Browser-local tool from Simple Licensing + Compliance that prepares the Financia
 
 - **This repository is public.** Never commit real client financial statements, client names tied to figures, or expected-value tables taken from a client file. Real test files go in `private-fixtures/` (git-ignored). Regression tests use synthetic data.
 - `main` deploys to Vercel production automatically (team `getsimple`, project `simple-financial-condition-generator`). Work on a branch, report verified results, and merge to `main` only when Jim approves.
-- No live NMLS filing or upload without Jim's explicit authorization. No live NMLS acceptance has been confirmed yet.
+- No live NMLS filing or upload without Jim's explicit authorization. Jim uploaded an XML from this app to NMLS himself on 2026-11-23 and reported that the upload worked; which values and completeness checks NMLS showed afterwards has not been confirmed.
 - Never invent a balancing entry. Source totals are reviewed, not counted as detail. Count each source amount once.
 - Preserve existing client, review, workbook and export behavior unless a change is requested.
 
@@ -76,4 +76,4 @@ Simple Licensing + Compliance · "Keep it Simple." · getsimple.co. Deep Ink Nav
 2. Decide the A230H aggregation when a rent deposit and net other assets both map there, and the mapping of payroll/tax accruals versus credit-card liabilities.
 3. Cost of revenue: the include control is off by default. Confirm whether it should default on.
 4. Standard (non-expanded) FC form: confirm whether it is still required.
-5. Browser check on the Vercel build and a first live NMLS acceptance test.
+5. After the first successful NMLS upload (2026-11-23): confirm that the amounts, the Schedule O zeros and the equity rollforward appear correctly in NMLS and note any completeness check warnings.
