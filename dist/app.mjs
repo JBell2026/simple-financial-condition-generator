@@ -3,6 +3,7 @@ import {balanceSheetSource,isBalanceSheetName,pageChecks,chosenPages,onlyPages,p
 import {guide,sourceLink,definitionWarnings,definitionIssues,requiresOtherAssetsExplanation} from './fv7.mjs';
 import {mountCombined} from './combined.mjs';
 import {mountAllocator} from './expenses.mjs';
+import {dReviewRows,dFieldMap} from './schedule-d.mjs';
 import {recall,rememberAccount,forget,savedCount,memoryKey} from './client-memory.mjs';
 import {fields,equityFields,suggestEquity,amount as exactAmount,rounded,parseLines,reconcile,reportingDate,needsOcr,amountColumns,selectAmountsByPage,tidyLabel,plural,wholeCents,usd} from './engine.mjs';
 // Amounts typed or read in this section are whole dollars.
@@ -222,11 +223,12 @@ const allocator=mountAllocator({getBalance:()=>({...reconcile(rows,controls),sou
 
 // Equity rollforward (Schedule B-350R): beginning equity is typed in; net income comes from
 // Schedules C & D; ending equity from the balance sheet; B350N is what remains.
+let lastRollforward={begin:null,net:null,adjust:null,ending:null},lastTies=[null,null,null];
 function renderRollforward(){
  const begin=$('beginEquity').value.trim()?amount($('beginEquity').value):null,ending=rows.some(r=>r.include&&r.section==='Equity')?reconcile(rows,controls).totals.Equity:null;
  let net=null;try{net=allocator.getNet();}catch{}
  const signed=v=>v<0?'('+money(-v)+')':money(v);
- const adjust=begin!==null&&ending!==null&&net!==null?ending-begin-net:null;
+ const adjust=begin!==null&&ending!==null&&net!==null?ending-begin-net:null;lastRollforward={begin,net,adjust,ending};
  const row=(code,name,value,from,cls='')=>'<tr class="'+cls+'"><td>'+code+'</td><td>'+name+'<br><small>'+from+'</small></td><td>'+(value===null?'—':money(value))+'</td></tr>';
  $('rollforwardTable').innerHTML='<table><thead><tr><th>NMLS line</th><th>What goes there</th><th>Amount</th></tr></thead><tbody>'
   +row('B350A','Balance at beginning of period',begin,begin===null?'Type it in the box above. It is the Total Equity (B350) from the prior period’s filing.':'The amount you typed above. It should equal Total Equity (B350) on the prior period’s filing.')
@@ -242,21 +244,21 @@ $('beginEquity').addEventListener('input',renderRollforward);
 const ROUNDING_LIMIT=1000; // differences above $10 are not rounding
 let roundingFixes=[];
 function renderRoundingChecks(){
- roundingFixes=[];const out=[],r=reconcile(rows,controls);let lines=[],figures={},report=null;try{lines=allocator.getLines();figures=allocator.getFigures();report=allocator.getReport();}catch{}
+ roundingFixes=[];lastTies=[null,null,null];const out=[],r=reconcile(rows,controls);let lines=[],figures={},report=null;try{lines=allocator.getLines();figures=allocator.getFigures();report=allocator.getReport();}catch{}
  const tick=ok=>'<span class="check-status '+(ok?'ok':'off')+'">'+(ok?'Ties':'Does not tie')+'</span>',dollars=d=>money(Math.abs(d)),fixButton=(label,apply)=>{roundingFixes.push(apply);return ' <button type="button" class="secondary fix-button" data-fix="'+(roundingFixes.length-1)+'">'+label+'</button>';};
  const block=(title,formula,status,body)=>'<div class="rounding-check"><h3>'+title+'</h3><p class="formula">'+formula+'</p>'+status+(body?'<p>'+body+'</p>':'')+'</div>';
  const pending=text=>'<span class="check-status wait">'+text+'</span>';
  // 1. D310 = C160 + D180 + D300 + D440
  if(!lines.length)out.push(block('1. Total expenses','D310 = C160 + D180 + D300 + D440',pending('Waiting for the expense list'),''));
  else{const part=c=>report.calculated.find(x=>x.code===c)?.cents||0,parts=['C160','D180','D300','D440'].map(part),sum=parts.reduce((a,b)=>a+b,0),adj=['D520','D540','D560'],all=lines.filter(l=>!adj.includes(l.field)).reduce((t,l)=>t+l.cents,0),unassigned=lines.filter(l=>!l.field);
-  out.push(block('1. Total expenses','D310 = C160 + D180 + D300 + D440<br>'+escape(money(all)+' = '+parts.map(money).join(' + ')+' ('+money(sum)+')'),tick(all===sum),all===sum?'':unassigned.length?plural(unassigned.length,'expense line')+' totalling '+escape(money(unassigned.reduce((t,l)=>t+l.cents,0)))+' '+(unassigned.length===1?'has':'have')+' no NMLS field yet: '+escape(unassigned.map(l=>l.label).join(', '))+'. Assign '+(unassigned.length===1?'it':'them')+' in the Schedules C &amp; D review and this will tie.':'The expense list and the NMLS subtotals differ by '+escape(dollars(all-sum))+'. Check the field on each expense line.'));}
+  lastTies[0]=all===sum;out.push(block('1. Total expenses','D310 = C160 + D180 + D300 + D440<br>'+escape(money(all)+' = '+parts.map(money).join(' + ')+' ('+money(sum)+')'),tick(all===sum),all===sum?'':unassigned.length?plural(unassigned.length,'expense line')+' totalling '+escape(money(unassigned.reduce((t,l)=>t+l.cents,0)))+' '+(unassigned.length===1?'has':'have')+' no NMLS field yet: '+escape(unassigned.map(l=>l.label).join(', '))+'. Assign '+(unassigned.length===1?'it':'them')+' in the Schedules C &amp; D review and this will tie.':'The expense list and the NMLS subtotals differ by '+escape(dollars(all-sum))+'. Check the field on each expense line.'));}
  // 2. D510 = C800 − D310, against the P&L's net income
  const net=(()=>{try{return allocator.getNet();}catch{return null;}})();
  if(net===null||!Number.isSafeInteger(figures.reportedNet))out.push(block('2. Net income','D510 = C800 − D310, and it must match the P&amp;L’s net income',pending('Waiting for income, expenses and the P&amp;L’s net income'),''));
  else{const diff=net-figures.reportedNet,adj=['D520','D540','D560'],pool=lines.filter(l=>!adj.includes(l.field)&&l.cents>Math.abs(diff)),target=([pool.filter(l=>l.field==='D280'),pool.filter(l=>l.category==='I'),pool].find(g=>g.length)||[]).sort((a,b)=>b.cents-a.cents)[0];
   let body='';if(diff&&Math.abs(diff)<=ROUNDING_LIMIT&&target)body='Recommendation: '+(diff>0?'add ':'take ')+escape(dollars(diff))+(diff>0?' to “':' off “')+escape(target.label)+'” ('+escape(money(target.cents))+(target.field?', '+target.field:'')+'), making it '+escape(money(target.cents+diff))+'. '+(target.field==='D280'?'It is an Other expenses line, the usual place for a rounding dollar.':'There is no Other expenses (D280) line, so this is the largest suitable line.')+fixButton('Make this change',()=>allocator.adjustLine(target.id,diff));
   else if(diff)body='The difference is '+escape(dollars(diff))+', which is too large to be rounding. Look for an expense that is missing, counted twice or misread.';
-  out.push(block('2. Net income','D510 = C800 − D310, and it must match the P&amp;L’s net income<br>'+escape(money(figures.gross)+' − '+money(figures.gross-net)+' = '+money(net)+'; the P&L shows '+money(figures.reportedNet)),tick(diff===0),body));}
+  lastTies[1]=diff===0;out.push(block('2. Net income','D510 = C800 − D310, and it must match the P&amp;L’s net income<br>'+escape(money(figures.gross)+' − '+money(figures.gross-net)+' = '+money(net)+'; the P&L shows '+money(figures.reportedNet)),tick(diff===0),body));}
  // 3. A240 = B220 + B350
  if(!r.count)out.push(block('3. Balance sheet','A240 = B220 + B350',pending('Waiting for the balance sheet'),''));
  else{const d=r.difference,t=r.totals,included=rows.filter(x=>x.include&&Number.isSafeInteger(x.cents));let body='';
@@ -267,7 +269,7 @@ function renderRoundingChecks(){
    const prefer={Assets:['A230H'],Liabilities:['B120','B100'],Equity:['B280','B340']}[section],pool=included.filter(x=>x.section===section&&Math.abs(x.cents)>Math.abs(d)),target=([pool.filter(x=>prefer.includes(x.code)),pool].find(g=>g.length)||[]).sort((a,b)=>Math.abs(b.cents)-Math.abs(a.cents))[0];
    if(target)body='Recommendation: '+(delta>0?'add ':'take ')+escape(dollars(delta))+(delta>0?' to “':' off “')+escape(target.label)+'” ('+escape(money(target.cents))+(target.code?', '+target.code:'')+'), making it '+escape(money(target.cents+delta))+'. '+(pointed?section+' no longer add up to the total printed on the statement, so the rounding dollar is in that section.':'The statement’s printed totals do not point to one section, so this uses the main equity line.')+fixButton('Make this change',()=>{target.cents+=delta;resetReview();table();});
   }else if(d)body='The difference is '+escape(dollars(d))+', which is too large to be rounding. Look for an account that is missing, unticked or in the wrong section.';
-  out.push(block('3. Balance sheet','A240 = B220 + B350<br>'+escape(money(t.Assets)+' = '+money(t.Liabilities)+' + '+money(t.Equity)+' ('+money(t.Liabilities+t.Equity)+')'),tick(d===0),body));}
+  lastTies[2]=d===0;out.push(block('3. Balance sheet','A240 = B220 + B350<br>'+escape(money(t.Assets)+' = '+money(t.Liabilities)+' + '+money(t.Equity)+' ('+money(t.Liabilities+t.Equity)+')'),tick(d===0),body));}
  $('roundingList').innerHTML=out.join('');
 }
 $('roundingList').addEventListener('click',e=>{const i=e.target.dataset?.fix;if(i!==undefined&&roundingFixes[Number(i)]){roundingFixes[Number(i)]();setTimeout(renderRoundingChecks,0);}});
@@ -281,3 +283,61 @@ $('expenseGuidance').innerHTML='<ul>'+['C210','C220','C230','C240','C770','D010'
 renderRollforward();
 renderRoundingChecks();
 showMemoryCount();
+
+// ---- Steps: the page is worked through five steps, each showing where it stands ----
+const stepNames=['Client','Balance sheet','Profit and loss','Checks and equity','Enter in NMLS'];
+let currentStep=1;
+function stepStates(){
+ const r=reconcile(rows,controls),meta={company:$('company').value.trim(),date:$('date').value,entity:$('entityType').value};
+ let lines=[],figures={};try{lines=allocator.getLines();figures=allocator.getFigures();}catch{}
+ const bsIssues=r.count?[...r.issues,...definitionIssues(r.groups,{otherAssetsExplanation:$('otherAssetsExplanation').value})]:[];
+ const allowed=entityEquity(),equityOff=rows.some(x=>x.include&&x.section==='Equity'&&x.code&&allowed&&!allowed.includes(x.code));
+ const one=!meta.company&&!meta.entity?'todo':meta.company&&meta.date&&meta.entity?'done':'attention';
+ const two=!r.count?'todo':bsIssues.length||equityOff||rows.some(x=>x.include&&!x.code)?'attention':'done';
+ const three=!lines.length?'todo':Number.isSafeInteger(figures.gross)&&Number.isSafeInteger(figures.reportedNet)?'done':'attention';
+ const four=lastTies.some(t=>t===false)?'attention':lastTies.some(t=>t===null)?'todo':lastRollforward.begin===null?'attention':'done';
+ const five=[one,two,three,four].every(x=>x==='done')?'done':[one,two,three,four].some(x=>x==='attention')?'attention':'todo';
+ return [one,two,three,four,five];
+}
+function stepNote(i,state){
+ if(state==='done')return i===4?'Ready':'Done';if(state==='todo')return i>=3&&stepStates().slice(0,i).some(x=>x!=='todo')?'Waiting on earlier steps':'Not started';
+ return ['Finish the client details','Needs attention','Income or net income missing',lastTies.some(t=>t===false)?'A check does not tie':lastTies.some(t=>t===null)?'Waiting on earlier steps':'Enter beginning equity','Earlier steps need attention'][i];
+}
+function renderSteps(){
+ const states=stepStates();
+ $('steps').innerHTML=stepNames.map((name,i)=>'<button type="button" class="step '+states[i]+(i+1===currentStep?' current':'')+'" data-go="'+(i+1)+'"'+(i+1===currentStep?' aria-current="step"':'')+'><span class="step-number">'+(i+1)+'</span><span class="step-text"><strong>'+name+'</strong><small>'+stepNote(i,states[i])+'</small></span></button>').join('');
+ document.querySelector('main').dataset.current=String(currentStep);
+ $('stepBack').hidden=currentStep===1;$('stepNext').hidden=currentStep===stepNames.length;$('stepNext').textContent=currentStep<stepNames.length?'Next: '+stepNames[currentStep]:'';
+ if(currentStep===5)renderSheet();
+}
+function goToStep(n){currentStep=Math.min(stepNames.length,Math.max(1,n));renderSteps();window.scrollTo({top:0});}
+$('steps').addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(b)goToStep(Number(b.dataset.go));});
+$('stepBack').onclick=()=>goToStep(currentStep-1);$('stepNext').onclick=()=>goToStep(currentStep+1);
+document.addEventListener('financialDataChanged',()=>setTimeout(renderSteps,10));
+['beginEquity','otherAssetsExplanation','scheduleGross','scheduleNet'].forEach(id=>$(id).addEventListener('input',()=>setTimeout(renderSteps,10)));
+$('roundingList').addEventListener('click',()=>setTimeout(renderSteps,30));
+
+// ---- Enter in NMLS: one sheet with every line and amount, in NMLS screen order ----
+function renderSheet(){
+ const r=reconcile(rows,controls),states=stepStates(),meta={company:$('company').value.trim(),nmls:$('nmls').value.trim(),date:$('date').value,period:$('xmlPeriod').selectedOptions[0]?.textContent||'',entity:$('entityType').selectedOptions[0]?.textContent||''};
+ let report=null,lines=[];try{lines=allocator.getLines();report=lines.length?allocator.getReport():null;}catch{}
+ const open=states.slice(0,4).map((st,i)=>st==='done'?'':stepNames[i]+' ('+stepNote(i,st).toLowerCase()+')').filter(Boolean);
+ $('sheetStatus').hidden=!open.length;$('sheetStatus').innerHTML=open.length?'<strong>Not final yet</strong><p>These steps are not finished, so some amounts below may change: '+escape(open.join('; '))+'.</p>':'';
+ const row=(code,name,value,kind)=>'<tr class="'+(kind==='calc'?'calculated-row':'')+'"><td>'+code+'</td><td>'+name+'</td><td>'+(value===null||value===undefined?'—':typeof value==='string'?value:money(value))+'</td><td>'+(kind==='calc'?'Calculated by NMLS':kind==='text'?'Type this text':'Enter')+'</td></tr>';
+ const head=title=>'<tr class="group-row"><th colspan="4">'+title+'</th></tr>';
+ let body='';
+ const balance=orderedReview(r.groups);
+ for(const [section,title] of [['Assets','Schedule A — Assets'],['Liabilities','Schedule B — Liabilities'],['Equity','Schedule B — Equity']]){const list=balance.filter(x=>x.section===section);if(!list.length)continue;body+=head(title)+list.map(x=>row(x.code,escape(x.label),x.cents,x.deps?'calc':'enter')).join('');
+  if(section==='Assets'&&r.groups.A230H&&$('otherAssetsExplanation').value.trim())body+=row('A230J','Explanation of Other Assets',escape($('otherAssetsExplanation').value.trim()),'text');}
+ const rf=lastRollforward;if(rf.ending!==null)body+=head('Schedule B-350R — Equity rollforward')+row('B350A','Balance at beginning of period',rf.begin,'enter')+row('B350B','Net income / (loss)',rf.net,'enter')+row('B350N','Equity adjustments',rf.adjust,'enter')+row('B350T','Balance at end of period',rf.ending,'calc');
+ if(report){const g=report.groups,incomeNames={C210:'Origination fees',C220:'Fees from correspondents and brokers',C230:'Broker fees',C240:'Other origination income',C770:'Other non-interest income'},hasGross=Number.isSafeInteger(report.options.gross);
+  body+=head('Schedule C — Income')+Object.keys(incomeNames).filter(c=>g[c]!==undefined).map(c=>row(c,incomeNames[c],hasGross?g[c]:null,'enter')).join('')+row('C060','Other interest income',hasGross?g.C060:null,'enter')+row('C800','Total gross income',hasGross?report.gross:null,'calc');
+  const detail=dReviewRows(report),interest=detail.filter(x=>/^C1/.test(x.code)),expense=detail.filter(x=>/^D/.test(x.code));
+  if(interest.length)body+=head('Schedule C — Interest expense')+interest.map(x=>row(x.code,escape(x.label),x.cents,x.deps?'calc':'enter')).join('');
+  if(expense.length)body+=head('Schedule D — Non-interest expenses and net income')+expense.map(x=>row(x.code,escape(x.label),hasGross||!['D510','D530','D550','D600'].includes(x.code)?x.cents:null,x.deps||x.code==='D310'||x.code==='D510'?'calc':'enter')).join('');}
+ if(body)body+=head('Schedule O')+row('O010–O384','All 22 Schedule O lines','$0','enter');
+ $('nmlsSheet').innerHTML=body?'<div class="sheet-heading"><strong>'+escape(meta.company||'Company not entered')+'</strong>'+(meta.nmls?' · NMLS ID '+escape(meta.nmls):'')+'<br>'+escape([meta.period&&meta.period!=='Select reporting period'?meta.period:'',$('reportYear').value,meta.date?'as of '+meta.date:'',meta.entity&&!/^Choose/.test(meta.entity)?meta.entity:''].filter(Boolean).join(' · '))+'</div><div class="table-wrap reconcile breakdown sheet-table"><table><thead><tr><th>NMLS line</th><th>Description</th><th>Amount</th><th></th></tr></thead><tbody>'+body+'</tbody></table></div>':'<p>Upload a balance sheet and a P&amp;L in the earlier steps and the lines to enter will be listed here.</p>';
+}
+$('printSheet').onclick=()=>{renderSheet();document.body.classList.add('print-sheet');window.print();setTimeout(()=>document.body.classList.remove('print-sheet'),500);};
+renderSteps();
+

@@ -34,6 +34,9 @@ Serve `dist/` with any static server for browser checks (`python3 -m http.server
 
 ## Product rules that are easy to break
 
+- **Five steps.** The page is worked through a sticky step bar: 1 Client, 2 Balance sheet, 3 Profit and loss, 4 Checks and equity, 5 Enter in NMLS. Each card carries `data-step`; only the current step's cards show. Each step shows Done, Needs attention or Not started (`stepStates`). Browser tests must move to a step before using its controls.
+- **Enter in NMLS sheet** (step 5): one table of every NMLS line with an amount in screen order (Schedule A, A230J text, Schedule B, B-350R rollforward, Schedule C, Schedule D, Schedule O zeros), each marked Enter or Calculated by NMLS, with a company and period heading, a notice when earlier steps are unfinished, and a Print or save as PDF button that prints only the sheet.
+
 - **Gross income override:** in SFC workbooks a valid numeric B36 (B43 in expanded, seven-row-shifted templates) overrides gross income, **including an explicit zero**. Blank or non-numeric falls back to L26/L33 (or Schedule D Setup B5 in the newer workbook). Both readers (`readSfc`, `readScheduleWorkbook`) must agree.
 - Non-interest income sent to NMLS = total gross income − other interest income (C060). The Section 4 preview shows source and amount. It goes to one income field, or is split between two (`incomeSplit`: the entered amount goes to the second field, the remainder stays in the first); the split is saved in Schedule D Setup B10/B11.
 - **The importer must stay general.** `format-corpus.test.mjs` runs synthetic QuickBooks Online, QuickBooks Desktop, Xero, CPA-prepared and comparative statements (`fixtures/statement-layouts.mjs`) through the import path; each must foot and reconcile. Add a synthetic layout there whenever a client statement exposes a new format. Do not add client-specific special cases.

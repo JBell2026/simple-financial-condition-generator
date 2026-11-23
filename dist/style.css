@@ -190,3 +190,45 @@ label.include-line input{width:auto;margin:0}
 .reading-report small{opacity:.8}
 .remembered{display:block;font-size:11px;color:#42505A;margin-top:2px}
 .memory-line{margin:8px 0 0}
+
+/* Steps */
+main[data-current] section[data-step]{display:none}
+main[data-current="1"] section[data-step="1"],main[data-current="2"] section[data-step="2"],main[data-current="3"] section[data-step="3"],main[data-current="4"] section[data-step="4"],main[data-current="5"] section[data-step="5"]{display:block}
+main[data-current] section[hidden]{display:none!important}
+.steps{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:0 0 18px;position:sticky;top:0;z-index:20;background:#F7F4EC;padding:10px 0}
+.steps .step{all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid #B3C2CA;border-radius:10px;background:white;min-width:0}
+.steps .step:focus-visible{outline:2px solid #985448;outline-offset:2px}
+.steps .step.current{border-color:#20354D;box-shadow:inset 0 0 0 2px #20354D}
+.steps .step-number{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;background:#B3C2CA;color:#20354D}
+.steps .step.done .step-number{background:#20354D;color:#F7F4EC}
+.steps .step.attention .step-number{background:#985448;color:#F7F4EC}
+.steps .step-text{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.steps .step-text strong{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.steps .step-text small{font-size:11px;opacity:.8}
+.steps .step.attention .step-text small{color:#985448;opacity:1;font-weight:600}
+.step-nav{display:flex;justify-content:space-between;gap:12px;margin:18px 0}
+.step-nav #stepNext{margin-left:auto}
+@media(max-width:900px){.steps{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px}.steps .step{padding:8px 6px;flex-direction:column;text-align:center;gap:4px}.steps .step-text strong{font-size:11px;white-space:normal}.steps .step-text small{display:none}}
+/* Enter in NMLS sheet */
+.sheet-heading{margin:6px 0 10px;line-height:1.5}
+.reconcile.sheet-table{max-width:900px}
+.reconcile.sheet-table td:nth-child(3){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.reconcile.sheet-table td:nth-child(4),.reconcile.sheet-table th:nth-child(4){text-align:left;font-size:12px;opacity:.85;white-space:nowrap;width:150px}
+.reconcile.sheet-table th:nth-child(3){text-align:right}
+@media print{
+ body.print-sheet header,body.print-sheet .intro,body.print-sheet .steps,body.print-sheet .step-nav,body.print-sheet footer,body.print-sheet #combined,body.print-sheet #printSheet,body.print-sheet dialog{display:none!important}
+ body.print-sheet main section[data-step]{display:none!important}
+ body.print-sheet main section#nmlsSheetCard{display:block!important;border:0;box-shadow:none;padding:0}
+ body.print-sheet{background:white}
+ body.print-sheet .reconcile.sheet-table{max-width:none}
+ body.print-sheet tr{break-inside:avoid}
+}
+@media print{
+ body.print-sheet{font-size:11px}
+ body.print-sheet .sheet-table table{table-layout:auto;width:100%}
+ body.print-sheet .sheet-table td,body.print-sheet .sheet-table th{padding:3px 8px!important;font-size:11px;line-height:1.3}
+ body.print-sheet .sheet-table td:nth-child(1){width:auto;white-space:nowrap}
+ body.print-sheet .sheet-table td:nth-child(4),body.print-sheet .sheet-table th:nth-child(4){width:auto;white-space:nowrap;font-size:10px}
+ body.print-sheet #nmlsSheetCard h2{font-size:20px;margin:0 0 4px}
+ body.print-sheet #sheetStatus{border:1px solid #985448}
+}
